@@ -15,37 +15,79 @@ async function startServer() {
   const server = createServer(app);
   app.use(express.json());
 
-  const messageSchema = z.object({ message: z.string().trim().min(1).max(200) });
+  const messageSchema = z.object({
+    message: z.string().trim().min(1).max(200),
+  });
 
   app.get("/api/hello", async (_req, res) => {
     try {
-      const { data, error } = await getSupabaseAnon().from("hello").select("id, message, created_at").order("created_at", { ascending: false });
+      const { data, error } = await getSupabaseAnon()
+        .from("hello")
+        .select("id, message, created_at")
+        .order("created_at", { ascending: false });
       if (error) return res.status(500).json({ error: error.message });
       return res.json({ data: data ?? [] });
     } catch (error) {
-      return res.status(503).json({ error: error instanceof Error ? error.message : "Supabase is not configured" });
+      return res
+        .status(503)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Supabase is not configured",
+        });
     }
   });
 
   app.post("/api/hello", async (req, res) => {
     const parsed = messageSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "message must be between 1 and 200 characters" });
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ error: "message must be between 1 and 200 characters" });
     try {
-      const { data, error } = await getSupabaseAnon().from("hello").insert(parsed.data).select("id, message, created_at").single();
+      const { data, error } = await getSupabaseAnon()
+        .from("hello")
+        .insert(parsed.data)
+        .select("id, message, created_at")
+        .single();
       if (error) return res.status(500).json({ error: error.message });
       return res.status(201).json({ data });
     } catch (error) {
-      return res.status(503).json({ error: error instanceof Error ? error.message : "Supabase is not configured" });
+      return res
+        .status(503)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Supabase is not configured",
+        });
     }
   });
 
   app.get("/api/health", async (_req, res) => {
     try {
-      const { error } = await getSupabaseAdmin().from("hello").select("id").limit(1);
-      if (error) return res.status(500).json({ status: "error", message: error.message });
-      return res.json({ status: "ok", db: "connected", time: new Date().toISOString() });
+      const { error } = await getSupabaseAdmin()
+        .from("hello")
+        .select("id")
+        .limit(1);
+      if (error)
+        return res
+          .status(500)
+          .json({ status: "error", message: error.message });
+      return res.json({
+        status: "ok",
+        db: "connected",
+        time: new Date().toISOString(),
+      });
     } catch (error) {
-      return res.status(500).json({ status: "error", message: error instanceof Error ? error.message : "Database unavailable" });
+      return res
+        .status(500)
+        .json({
+          status: "error",
+          message:
+            error instanceof Error ? error.message : "Database unavailable",
+        });
     }
   });
 

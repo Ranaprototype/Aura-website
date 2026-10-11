@@ -2,66 +2,840 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { addToCart } from "../lib/cart";
 import Phase6Controls from "../components/Phase6Controls";
 import { getProduct } from "../lib/catalog";
-import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Maximize2, Mic, PackageCheck, Palette, Plus, RotateCcw, Shuffle, Sparkles, Split, ShoppingBag, SlidersHorizontal, Volume2, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  CircleHelp,
+  Copy,
+  Eye,
+  EyeOff,
+  Maximize2,
+  Mic,
+  PackageCheck,
+  Palette,
+  Plus,
+  RotateCcw,
+  Shuffle,
+  Sparkles,
+  Split,
+  ShoppingBag,
+  SlidersHorizontal,
+  Volume2,
+  X,
+} from "lucide-react";
 
 type Part = "upper" | "sole" | "laces" | "heel" | "tongue";
-export type Config = { upper: string; upperMat: string; sole: string; soleMat: string; laces: string; lacesMat: string; heel: string; tongue: string; size: string };
+export type Config = {
+  upper: string;
+  upperMat: string;
+  sole: string;
+  soleMat: string;
+  laces: string;
+  lacesMat: string;
+  heel: string;
+  tongue: string;
+  size: string;
+};
 
 const aeroProduct = getProduct("aether-runner-01")!;
-const defaults: Config = { upper: "#8b5cf6", upperMat: "mesh", sole: "#0b1220", soleMat: "foam", laces: "#00eaff", lacesMat: "flat", heel: "#3b82f6", tongue: "#a855f7", size: "9" };
+const defaults: Config = {
+  upper: "#8b5cf6",
+  upperMat: "mesh",
+  sole: "#0b1220",
+  soleMat: "foam",
+  laces: "#00eaff",
+  lacesMat: "flat",
+  heel: "#3b82f6",
+  tongue: "#a855f7",
+  size: "9",
+};
 const parts: { id: Part; label: string; note: string }[] = [
-  { id: "upper", label: "Upper", note: "Surface shell" }, { id: "sole", label: "Sole", note: "Foundation layer" }, { id: "laces", label: "Laces", note: "Tension system" }, { id: "heel", label: "Heel", note: "Support frame" }, { id: "tongue", label: "Tongue", note: "Comfort layer" },
+  { id: "upper", label: "Upper", note: "Surface shell" },
+  { id: "sole", label: "Sole", note: "Foundation layer" },
+  { id: "laces", label: "Laces", note: "Tension system" },
+  { id: "heel", label: "Heel", note: "Support frame" },
+  { id: "tongue", label: "Tongue", note: "Comfort layer" },
 ];
-const colors = ["#f4f4f5", "#0b1220", "#ef4444", "#3b82f6", "#00eaff", "#fbbf24"];
-const materials: Record<Part, string[]> = { upper: ["leather", "mesh", "suede"], sole: ["rubber", "foam"], laces: ["flat", "round"], heel: ["mesh", "suede"], tongue: ["mesh", "suede"] };
-const prices = { base: 120, leather: 15, suede: 20, soleCustom: 10, lacesCustom: 5 };
+const colors = [
+  "#f4f4f5",
+  "#0b1220",
+  "#ef4444",
+  "#3b82f6",
+  "#00eaff",
+  "#fbbf24",
+];
+const materials: Record<Part, string[]> = {
+  upper: ["leather", "mesh", "suede"],
+  sole: ["rubber", "foam"],
+  laces: ["flat", "round"],
+  heel: ["mesh", "suede"],
+  tongue: ["mesh", "suede"],
+};
+const prices = {
+  base: 120,
+  leather: 15,
+  suede: 20,
+  soleCustom: 10,
+  lacesCustom: 5,
+};
 
 function parseConfig(): Config {
   const params = new URLSearchParams(window.location.search);
-  return { ...defaults, upper: params.get("upper") || defaults.upper, upperMat: params.get("upperMat") || defaults.upperMat, sole: params.get("sole") || defaults.sole, laces: params.get("laces") || defaults.laces, size: params.get("size") || defaults.size };
+  return {
+    ...defaults,
+    upper: params.get("upper") || defaults.upper,
+    upperMat: params.get("upperMat") || defaults.upperMat,
+    sole: params.get("sole") || defaults.sole,
+    laces: params.get("laces") || defaults.laces,
+    size: params.get("size") || defaults.size,
+  };
 }
 
-function HoloCanvas({ config, activePart, hoverPart, exploded, xray, syncing, reduced, onPartHover, onPartClick }: { config: Config; activePart: Part; hoverPart: Part | null; exploded: boolean; xray: boolean; syncing: boolean; reduced: boolean; onPartHover: (part: Part | null) => void; onPartClick: (part: Part) => void }) {
+function HoloCanvas({
+  config,
+  activePart,
+  hoverPart,
+  exploded,
+  xray,
+  syncing,
+  reduced,
+  onPartHover,
+  onPartClick,
+}: {
+  config: Config;
+  activePart: Part;
+  hoverPart: Part | null;
+  exploded: boolean;
+  xray: boolean;
+  syncing: boolean;
+  reduced: boolean;
+  onPartHover: (part: Part | null) => void;
+  onPartClick: (part: Part) => void;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [rotation, setRotation] = useState(0);
   const [drag, setDrag] = useState(false);
-  const last = useRef(0); const start = useRef(0); const idle = useRef(0);
-  const pickPart = (event: React.PointerEvent<HTMLCanvasElement>): Part | null => { const rect = event.currentTarget.getBoundingClientRect(); const x = (event.clientX - rect.left) / rect.width - .5; const y = (event.clientY - rect.top) / rect.height - .5; if (x > .18 && y > -.16 && y < .24) return "heel"; if (y < -.18) return "tongue"; if (y > .2) return "sole"; if (y > -.12 && y < .04) return "laces"; if (Math.abs(x) < .42 && y > -.2 && y < .22) return "upper"; return null; };
+  const last = useRef(0);
+  const start = useRef(0);
+  const idle = useRef(0);
+  const pickPart = (
+    event: React.PointerEvent<HTMLCanvasElement>
+  ): Part | null => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width - 0.5;
+    const y = (event.clientY - rect.top) / rect.height - 0.5;
+    if (x > 0.18 && y > -0.16 && y < 0.24) return "heel";
+    if (y < -0.18) return "tongue";
+    if (y > 0.2) return "sole";
+    if (y > -0.12 && y < 0.04) return "laces";
+    if (Math.abs(x) < 0.42 && y > -0.2 && y < 0.22) return "upper";
+    return null;
+  };
   useEffect(() => {
-    const element = canvas.current; if (!element) return; const ctx = element.getContext("2d"); if (!ctx) return;
-    const resize = () => { const dpr = Math.min(window.devicePixelRatio || 1, 2); const rect = element.getBoundingClientRect(); element.width = rect.width * dpr; element.height = rect.height * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
-    const draw = (time: number) => { const orbit = Math.max(0, time - idle.current - 5000); const displayRotation = rotation + orbit / 30000 * 360; const rect = element.getBoundingClientRect(); const w = rect.width; const h = rect.height; ctx.clearRect(0, 0, w, h); const gradient = ctx.createRadialGradient(w * .51, h * .52, 20, w * .51, h * .52, 320); gradient.addColorStop(0, "rgba(0,234,255,.2)"); gradient.addColorStop(.55, "rgba(124,58,237,.1)"); gradient.addColorStop(1, "transparent"); ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
-      const sweep = reduced ? 0 : (time % 4000) / 4000; const glitch = !reduced && Math.floor(time / 7200) % 2 === 1; const bob = Math.sin(time / 900) * (reduced ? 0 : 4); ctx.save(); ctx.translate(w / 2, h / 2 + bob); ctx.rotate((displayRotation * Math.PI) / 180); const ex = exploded ? 38 : 0;
-      const partsDraw = [{ name: "sole", x: 0, y: 44 + ex, color: config.sole, width: 245, height: 45 }, { name: "upper", x: 0, y: -8 - ex * .45, color: config.upper, width: 250, height: 115 }, { name: "heel", x: 104 + ex * .65, y: 4, color: config.heel, width: 45, height: 85 }, { name: "tongue", x: -28, y: -76 - ex, color: config.tongue, width: 62, height: 94 }, { name: "laces", x: -15, y: -26, color: config.laces, width: 82, height: 10 }];
-      for (const item of partsDraw) { const selected = item.name === activePart; const hovered = item.name === hoverPart; const alpha = xray ? .26 : 1; const color = item.color; ctx.save(); ctx.translate(item.x + (glitch && item.name === "upper" ? 4 : 0), item.y); ctx.globalAlpha = alpha; ctx.shadowBlur = selected || hovered ? 46 : 25; ctx.shadowColor = color; ctx.fillStyle = color; if (item.name === "upper") { ctx.beginPath(); ctx.moveTo(-item.width / 2, 25); ctx.quadraticCurveTo(-90, -62, 10, -60); ctx.quadraticCurveTo(105, -55, item.width / 2, 34); ctx.quadraticCurveTo(60, 62, -item.width / 2, 52); ctx.closePath(); ctx.fill(); } else if (item.name === "sole") { ctx.beginPath(); ctx.roundRect(-item.width / 2, -item.height / 2, item.width, item.height, 22); ctx.fill(); } else { ctx.beginPath(); ctx.roundRect(-item.width / 2, -item.height / 2, item.width, item.height, item.name === "laces" ? 5 : 12); ctx.fill(); } ctx.globalAlpha = selected || hovered ? .85 : .36; ctx.strokeStyle = "#fff"; ctx.lineWidth = selected || hovered ? 2 : 1; ctx.stroke(); if (item.name === "upper" && !xray) { ctx.globalAlpha = .25; ctx.strokeStyle = "#00eaff"; ctx.setLineDash([5, 5]); ctx.stroke(); } ctx.restore(); }
-      ctx.globalAlpha = .45; ctx.strokeStyle = "#00eaff"; ctx.lineWidth = 1; for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(-124, i * 18); ctx.lineTo(124, i * 18); ctx.stroke(); } ctx.globalAlpha = .16; ctx.fillStyle = "#fff"; for (let i = 0; i < 22; i++) { const px = Math.sin(i * 91.7) * 145; const py = Math.cos(i * 37.3) * 65 + (syncing ? (i % 2 ? -1 : 1) * ((time / 4) % 40) : 0); ctx.fillRect(px, py, 1.5, 1.5); } if (!reduced) { ctx.globalAlpha = .22; ctx.fillStyle = "#fff"; ctx.fillRect(-140, -125 + sweep * 250, 280, 2); } ctx.restore();
-      ctx.save(); ctx.strokeStyle = "rgba(0,234,255,.2)"; ctx.lineWidth = 1; ctx.setLineDash([4, 9]); for (let r = 185; r < 255; r += 28) { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, r, r * .35, -.2, 0, Math.PI * 2); ctx.stroke(); } ctx.restore(); if (!reduced) requestAnimationFrame(draw); };
-    resize(); idle.current = performance.now(); window.addEventListener("resize", resize); const frame = requestAnimationFrame(draw); return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", resize); };
-  }, [config, activePart, hoverPart, exploded, xray, syncing, reduced, rotation]);
-  return <canvas ref={canvas} className={`sneaker-canvas ${drag ? "sneaker-canvas--drag" : ""}`} onPointerDown={(e) => { setDrag(true); start.current = e.clientX; last.current = e.clientX; idle.current = performance.now(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { const picked = pickPart(e); onPartHover(picked); idle.current = performance.now(); if (drag) { setRotation((r) => r + (e.clientX - last.current) * .45); last.current = e.clientX; } }} onPointerUp={(e) => { setDrag(false); const picked = pickPart(e); if (picked && Math.abs(e.clientX - start.current) < 8) onPartClick(picked); }} onPointerLeave={() => { setDrag(false); onPartHover(null); }} aria-label="Interactive AERO RUNNER X hologram. Drag to rotate; hover and click visible parts to focus." />;
+    const element = canvas.current;
+    if (!element) return;
+    const ctx = element.getContext("2d");
+    if (!ctx) return;
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = element.getBoundingClientRect();
+      element.width = rect.width * dpr;
+      element.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    const draw = (time: number) => {
+      const orbit = Math.max(0, time - idle.current - 5000);
+      const displayRotation = rotation + (orbit / 30000) * 360;
+      const rect = element.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+      const gradient = ctx.createRadialGradient(
+        w * 0.51,
+        h * 0.52,
+        20,
+        w * 0.51,
+        h * 0.52,
+        320
+      );
+      gradient.addColorStop(0, "rgba(0,234,255,.2)");
+      gradient.addColorStop(0.55, "rgba(124,58,237,.1)");
+      gradient.addColorStop(1, "transparent");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+      const sweep = reduced ? 0 : (time % 4000) / 4000;
+      const glitch = !reduced && Math.floor(time / 7200) % 2 === 1;
+      const bob = Math.sin(time / 900) * (reduced ? 0 : 4);
+      ctx.save();
+      ctx.translate(w / 2, h / 2 + bob);
+      ctx.rotate((displayRotation * Math.PI) / 180);
+      const ex = exploded ? 38 : 0;
+      const partsDraw = [
+        {
+          name: "sole",
+          x: 0,
+          y: 44 + ex,
+          color: config.sole,
+          width: 245,
+          height: 45,
+        },
+        {
+          name: "upper",
+          x: 0,
+          y: -8 - ex * 0.45,
+          color: config.upper,
+          width: 250,
+          height: 115,
+        },
+        {
+          name: "heel",
+          x: 104 + ex * 0.65,
+          y: 4,
+          color: config.heel,
+          width: 45,
+          height: 85,
+        },
+        {
+          name: "tongue",
+          x: -28,
+          y: -76 - ex,
+          color: config.tongue,
+          width: 62,
+          height: 94,
+        },
+        {
+          name: "laces",
+          x: -15,
+          y: -26,
+          color: config.laces,
+          width: 82,
+          height: 10,
+        },
+      ];
+      for (const item of partsDraw) {
+        const selected = item.name === activePart;
+        const hovered = item.name === hoverPart;
+        const alpha = xray ? 0.26 : 1;
+        const color = item.color;
+        ctx.save();
+        ctx.translate(
+          item.x + (glitch && item.name === "upper" ? 4 : 0),
+          item.y
+        );
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = selected || hovered ? 46 : 25;
+        ctx.shadowColor = color;
+        ctx.fillStyle = color;
+        if (item.name === "upper") {
+          ctx.beginPath();
+          ctx.moveTo(-item.width / 2, 25);
+          ctx.quadraticCurveTo(-90, -62, 10, -60);
+          ctx.quadraticCurveTo(105, -55, item.width / 2, 34);
+          ctx.quadraticCurveTo(60, 62, -item.width / 2, 52);
+          ctx.closePath();
+          ctx.fill();
+        } else if (item.name === "sole") {
+          ctx.beginPath();
+          ctx.roundRect(
+            -item.width / 2,
+            -item.height / 2,
+            item.width,
+            item.height,
+            22
+          );
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.roundRect(
+            -item.width / 2,
+            -item.height / 2,
+            item.width,
+            item.height,
+            item.name === "laces" ? 5 : 12
+          );
+          ctx.fill();
+        }
+        ctx.globalAlpha = selected || hovered ? 0.85 : 0.36;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = selected || hovered ? 2 : 1;
+        ctx.stroke();
+        if (item.name === "upper" && !xray) {
+          ctx.globalAlpha = 0.25;
+          ctx.strokeStyle = "#00eaff";
+          ctx.setLineDash([5, 5]);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = "#00eaff";
+      ctx.lineWidth = 1;
+      for (let i = -3; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-124, i * 18);
+        ctx.lineTo(124, i * 18);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#fff";
+      for (let i = 0; i < 22; i++) {
+        const px = Math.sin(i * 91.7) * 145;
+        const py =
+          Math.cos(i * 37.3) * 65 +
+          (syncing ? (i % 2 ? -1 : 1) * ((time / 4) % 40) : 0);
+        ctx.fillRect(px, py, 1.5, 1.5);
+      }
+      if (!reduced) {
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(-140, -125 + sweep * 250, 280, 2);
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.strokeStyle = "rgba(0,234,255,.2)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 9]);
+      for (let r = 185; r < 255; r += 28) {
+        ctx.beginPath();
+        ctx.ellipse(w / 2, h / 2, r, r * 0.35, -0.2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (!reduced) requestAnimationFrame(draw);
+    };
+    resize();
+    idle.current = performance.now();
+    window.addEventListener("resize", resize);
+    const frame = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", resize);
+    };
+  }, [
+    config,
+    activePart,
+    hoverPart,
+    exploded,
+    xray,
+    syncing,
+    reduced,
+    rotation,
+  ]);
+  return (
+    <canvas
+      ref={canvas}
+      className={`sneaker-canvas ${drag ? "sneaker-canvas--drag" : ""}`}
+      onPointerDown={e => {
+        setDrag(true);
+        start.current = e.clientX;
+        last.current = e.clientX;
+        idle.current = performance.now();
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={e => {
+        const picked = pickPart(e);
+        onPartHover(picked);
+        idle.current = performance.now();
+        if (drag) {
+          setRotation(r => r + (e.clientX - last.current) * 0.45);
+          last.current = e.clientX;
+        }
+      }}
+      onPointerUp={e => {
+        setDrag(false);
+        const picked = pickPart(e);
+        if (picked && Math.abs(e.clientX - start.current) < 8)
+          onPartClick(picked);
+      }}
+      onPointerLeave={() => {
+        setDrag(false);
+        onPartHover(null);
+      }}
+      aria-label="Interactive AERO RUNNER X hologram. Drag to rotate; hover and click visible parts to focus."
+    />
+  );
 }
-function SidePanel({ part, config, setPart, setConfig }: { part: Part; config: Config; setPart: (part: Part) => void; setConfig: (config: Config) => void }) {
-  const [open, setOpen] = useState<Record<Part, boolean>>({ upper: true, sole: false, laces: false, heel: false, tongue: false });
+function SidePanel({
+  part,
+  config,
+  setPart,
+  setConfig,
+}: {
+  part: Part;
+  config: Config;
+  setPart: (part: Part) => void;
+  setConfig: (config: Config) => void;
+}) {
+  const [open, setOpen] = useState<Record<Part, boolean>>({
+    upper: true,
+    sole: false,
+    laces: false,
+    heel: false,
+    tongue: false,
+  });
   const currentColor = config[part] as string;
-  return <aside className="config-panel config-panel--left"><div className="hud-label"><SlidersHorizontal size={13} /> CONFIGURE / 01</div><div className="part-list">{parts.map((item, index) => <div key={item.id} className={`part-section ${part === item.id ? "part-section--active" : ""}`}><button className="part-trigger" onClick={() => { setPart(item.id); setOpen((v) => ({ ...v, [item.id]: !v[item.id] })); }}><span className="part-number">0{index + 1}</span><span><strong>{item.label}</strong><small>{item.note}</small></span>{open[item.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{open[item.id] && part === item.id && <div className="part-options"><div className="color-wheel" style={{ background: `conic-gradient(#ef4444, #fbbf24, #d2ff8b, #00eaff, #3b82f6, #a855f7, #ef4444)` }}><span style={{ background: currentColor }} /></div><div className="quick-colors">{colors.map((color) => <button key={color} aria-label={`Set ${item.label} color to ${color}`} className={currentColor === color ? "selected" : ""} style={{ background: color }} onClick={() => setConfig({ ...config, [item.id]: color })} />)}</div><label className="hex-input"><span>HEX</span><input value={currentColor} onChange={(e) => setConfig({ ...config, [item.id]: e.target.value })} /></label>{(item.id === "upper" || item.id === "sole" || item.id === "laces") && <div className="material-row">{materials[item.id].map((material) => <button key={material} className={config[`${item.id}Mat` as keyof Config] === material ? "active" : ""} onClick={() => setConfig({ ...config, [`${item.id}Mat`]: material })}>{material}</button>)}</div>}</div>}</div>)}</div><div className="hud-hint"><CircleHelp size={13} /> Hover a part for signal focus. Keys 1–5 select parts.</div></aside>;
+  return (
+    <aside className="config-panel config-panel--left">
+      <div className="hud-label">
+        <SlidersHorizontal size={13} /> CONFIGURE / 01
+      </div>
+      <div className="part-list">
+        {parts.map((item, index) => (
+          <div
+            key={item.id}
+            className={`part-section ${part === item.id ? "part-section--active" : ""}`}
+          >
+            <button
+              className="part-trigger"
+              onClick={() => {
+                setPart(item.id);
+                setOpen(v => ({ ...v, [item.id]: !v[item.id] }));
+              }}
+            >
+              <span className="part-number">0{index + 1}</span>
+              <span>
+                <strong>{item.label}</strong>
+                <small>{item.note}</small>
+              </span>
+              {open[item.id] ? (
+                <ChevronUp size={14} />
+              ) : (
+                <ChevronDown size={14} />
+              )}
+            </button>
+            {open[item.id] && part === item.id && (
+              <div className="part-options">
+                <div
+                  className="color-wheel"
+                  style={{
+                    background: `conic-gradient(#ef4444, #fbbf24, #d2ff8b, #00eaff, #3b82f6, #a855f7, #ef4444)`,
+                  }}
+                >
+                  <span style={{ background: currentColor }} />
+                </div>
+                <div className="quick-colors">
+                  {colors.map(color => (
+                    <button
+                      key={color}
+                      aria-label={`Set ${item.label} color to ${color}`}
+                      className={currentColor === color ? "selected" : ""}
+                      style={{ background: color }}
+                      onClick={() => setConfig({ ...config, [item.id]: color })}
+                    />
+                  ))}
+                </div>
+                <label className="hex-input">
+                  <span>HEX</span>
+                  <input
+                    value={currentColor}
+                    onChange={e =>
+                      setConfig({ ...config, [item.id]: e.target.value })
+                    }
+                  />
+                </label>
+                {(item.id === "upper" ||
+                  item.id === "sole" ||
+                  item.id === "laces") && (
+                  <div className="material-row">
+                    {materials[item.id].map(material => (
+                      <button
+                        key={material}
+                        className={
+                          config[`${item.id}Mat` as keyof Config] === material
+                            ? "active"
+                            : ""
+                        }
+                        onClick={() =>
+                          setConfig({ ...config, [`${item.id}Mat`]: material })
+                        }
+                      >
+                        {material}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="hud-hint">
+        <CircleHelp size={13} /> Hover a part for signal focus. Keys 1–5 select
+        parts.
+      </div>
+    </aside>
+  );
 }
 
-function RightPanel({ config, total, added, open, onClose, onSize, onAdd, onShare }: { config: Config; total: number; added: boolean; open: boolean; onClose: () => void; onSize: (size: string) => void; onAdd: () => void; onShare: () => void }) {
-  const line = (label: string, value: number) => <div className="price-line"><span>{label}</span><strong>{value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2)}</strong></div>;
-  return <aside className={`config-panel config-panel--right ${open ? "is-open" : ""}`}><button className="mobile-summary-close" onClick={onClose} aria-label="Close price summary"><X size={15} /></button><div className="hud-label">AERO RUNNER X / LIVE BUILD</div><div className="live-price"><small>LIVE PRICE</small><strong>${total.toFixed(2)}</strong><span>USD · CONFIGURATION SYNCED</span></div><div className="size-block"><div className="hud-label">SELECT SIZE <span>6 — 12</span></div><div className="size-row">{["6", "7", "8", "9", "10", "11", "12"].map((size) => <button className={config.size === size ? "active" : ""} key={size} onClick={() => onSize(size)}>{size}</button>)}</div><small className="stock-note"><span className="status-dot" /> Ships in 3–5 days · size {config.size}</small></div><div className="price-breakdown"><div className="hud-label">PRICE BREAKDOWN</div>{line("Base", 120)}{line(`Upper (${config.upperMat})`, config.upperMat === "leather" ? 15 : config.upperMat === "suede" ? 20 : 0)}{line("Sole (custom)", config.sole !== defaults.sole ? 10 : 0)}{line("Laces", config.laces !== defaults.laces ? 5 : 0)}<div className="price-total"><span>Total</span><strong>${total.toFixed(2)}</strong></div></div><div className="config-actions"><button className={`button button--primary ${added ? "is-added" : ""}`} onClick={onAdd}>{added ? <Check size={16} /> : <ShoppingBag size={16} />} {added ? "Added to Collection" : "Add to Collection"}</button><button className="button button--ghost" onClick={onShare}><Copy size={15} /> Share build</button></div></aside>;
+function RightPanel({
+  config,
+  total,
+  added,
+  open,
+  onClose,
+  onSize,
+  onAdd,
+  onShare,
+}: {
+  config: Config;
+  total: number;
+  added: boolean;
+  open: boolean;
+  onClose: () => void;
+  onSize: (size: string) => void;
+  onAdd: () => void;
+  onShare: () => void;
+}) {
+  const line = (label: string, value: number) => (
+    <div className="price-line">
+      <span>{label}</span>
+      <strong>
+        {value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2)}
+      </strong>
+    </div>
+  );
+  return (
+    <aside
+      className={`config-panel config-panel--right ${open ? "is-open" : ""}`}
+    >
+      <button
+        className="mobile-summary-close"
+        onClick={onClose}
+        aria-label="Close price summary"
+      >
+        <X size={15} />
+      </button>
+      <div className="hud-label">AERO RUNNER X / LIVE BUILD</div>
+      <div className="live-price">
+        <small>LIVE PRICE</small>
+        <strong>${total.toFixed(2)}</strong>
+        <span>USD · CONFIGURATION SYNCED</span>
+      </div>
+      <div className="size-block">
+        <div className="hud-label">
+          SELECT SIZE <span>6 — 12</span>
+        </div>
+        <div className="size-row">
+          {["6", "7", "8", "9", "10", "11", "12"].map(size => (
+            <button
+              className={config.size === size ? "active" : ""}
+              key={size}
+              onClick={() => onSize(size)}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+        <small className="stock-note">
+          <span className="status-dot" /> Ships in 3–5 days · size {config.size}
+        </small>
+      </div>
+      <div className="price-breakdown">
+        <div className="hud-label">PRICE BREAKDOWN</div>
+        {line("Base", 120)}
+        {line(
+          `Upper (${config.upperMat})`,
+          config.upperMat === "leather"
+            ? 15
+            : config.upperMat === "suede"
+              ? 20
+              : 0
+        )}
+        {line("Sole (custom)", config.sole !== defaults.sole ? 10 : 0)}
+        {line("Laces", config.laces !== defaults.laces ? 5 : 0)}
+        <div className="price-total">
+          <span>Total</span>
+          <strong>${total.toFixed(2)}</strong>
+        </div>
+      </div>
+      <div className="config-actions">
+        <button
+          className={`button button--primary ${added ? "is-added" : ""}`}
+          onClick={onAdd}
+        >
+          {added ? <Check size={16} /> : <ShoppingBag size={16} />}{" "}
+          {added ? "Added to Collection" : "Add to Collection"}
+        </button>
+        <button className="button button--ghost" onClick={onShare}>
+          <Copy size={15} /> Share build
+        </button>
+      </div>
+    </aside>
+  );
 }
 
 export default function SneakerConfigurator() {
-  const [config, setConfig] = useState<Config>(parseConfig); const [summaryOpen, setSummaryOpen] = useState(false); const [part, setPart] = useState<Part>("upper"); const [hoverPart, setHoverPart] = useState<Part | null>(null); const [loading, setLoading] = useState(true); const [exploded, setExploded] = useState(false); const [xray, setXray] = useState(false); const [added, setAdded] = useState(false); const [syncing, setSyncing] = useState(false); const [toast, setToast] = useState(""); const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  useEffect(() => { const timer = window.setTimeout(() => setLoading(false), reduced ? 350 : 1250); return () => window.clearTimeout(timer); }, [reduced]);
-  const total = useMemo(() => prices.base + (config.upperMat === "leather" ? prices.leather : config.upperMat === "suede" ? prices.suede : 0) + (config.sole !== defaults.sole ? prices.soleCustom : 0) + (config.laces !== defaults.laces ? prices.lacesCustom : 0), [config]);
-  const mutate = (next: Config) => { setConfig(next); setSyncing(true); window.setTimeout(() => setSyncing(false), 650); };
-  useEffect(() => { const onKey = (event: KeyboardEvent) => { const key = event.key.toLowerCase(); if (key === "r") { mutate(defaults); setExploded(false); setXray(false); } if (key === "e") setExploded((value) => !value); if (key === "x") setXray((value) => !value); if (key === "arrowleft") setToast("ROTATE LEFT"); if (key === "arrowright") setToast("ROTATE RIGHT"); if (["1", "2", "3", "4", "5"].includes(key)) setPart(parts[Number(key) - 1].id); if (key === "escape") goHome(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, []);
-  const goHome = () => { window.history.pushState({}, "", "/"); window.dispatchEvent(new PopStateEvent("popstate")); };
-  const share = () => { const params = new URLSearchParams({ upper: config.upper, upperMat: config.upperMat, sole: config.sole, laces: config.laces, size: config.size }); const url = `${window.location.origin}/product/sneaker?${params}`; navigator.clipboard?.writeText(url); window.history.replaceState({}, "", `/product/sneaker?${params}`); setToast("BUILD LINK COPIED"); window.setTimeout(() => setToast(""), 2200); };
-  const setSize = (size: string) => { setConfig((current) => ({ ...current, size })); const next = new URLSearchParams(window.location.search); next.set("size", size); window.history.replaceState({}, "", `${window.location.pathname}?${next}`); };
-  const add = () => { localStorage.setItem("holo-aero-runner-build", JSON.stringify(config)); addToCart(aeroProduct, { price: total, size: config.size, configuration: `${config.upperMat} · ${config.upper}` }); setAdded(true); setToast("ADDED TO COLLECTION"); window.setTimeout(() => setToast(""), 2200); };
-  const randomize = () => mutate({ ...config, upper: colors[Math.floor(Math.random() * colors.length)], sole: colors[Math.floor(Math.random() * colors.length)], laces: colors[Math.floor(Math.random() * colors.length)], upperMat: ["mesh", "leather", "suede"][Math.floor(Math.random() * 3)] });
-  const screenshot = () => { const c = document.createElement("canvas"); c.width = 1200; c.height = 700; const ctx = c.getContext("2d")!; ctx.fillStyle = "#050508"; ctx.fillRect(0, 0, c.width, c.height); ctx.fillStyle = config.upper; ctx.shadowColor = config.upper; ctx.shadowBlur = 50; ctx.beginPath(); ctx.ellipse(600, 350, 260, 100, -.1, 0, Math.PI * 2); ctx.fill(); const a = document.createElement("a"); a.download = "aero-runner-x-hologram.png"; a.href = c.toDataURL(); a.click(); setToast("SCREENSHOT SAVED"); window.setTimeout(() => setToast(""), 2200); };
-  return <div className="configurator"><div className="configurator-grid" /><div className="corner corner--tl" /><div className="corner corner--tr" /><div className="corner corner--bl" /><div className="corner corner--br" /><header className="config-topbar"><button className="config-back" onClick={goHome}><ArrowLeft size={16} /> <span>Back</span></button><div className="config-title"><span>AERO RUNNER X</span><small>HOLO OBJECT / SNEAKER / 001</small></div><div className="config-top-actions"><button className="mini-price" onClick={() => setSummaryOpen((value) => !value)} aria-label="Open live price summary">${total.toFixed(2)}</button><a href="/cart" aria-label="Cart"><ShoppingBag size={17} /></a></div></header><main className="config-main"><SidePanel part={part} config={config} setPart={setPart} setConfig={mutate} /><section className="config-stage"><div className="stage-signal"><span className="status-dot" /> LIVE HOLOGRAM / SIGNAL 98.4%</div><div className={`holo-stage ${syncing ? "holo-stage--syncing" : ""}`}><HoloCanvas config={config} activePart={part} hoverPart={hoverPart} exploded={exploded} xray={xray} syncing={syncing} reduced={reduced} onPartHover={setHoverPart} onPartClick={setPart} /><div className={`holo-label holo-label--upper ${hoverPart ? "holo-label--visible" : ""}`}>{(hoverPart || part).toUpperCase()} / {hoverPart ? "HOVER" : "FOCUS"}</div></div><div className="stage-status"><span>{syncing ? "SYNCING…" : "DRAG TO ROTATE"}</span><span>GRID / 04 · 23 · 11</span></div></section><RightPanel config={config} total={total} added={added} open={summaryOpen} onClose={() => setSummaryOpen(false)} onSize={setSize} onAdd={add} onShare={share} /></main>{loading && <div className="config-loading"><div className="loading-avatar"><div className="avatar-core avatar-core--2" /></div><strong>ASSEMBLING HOLOGRAM…</strong><span>PARTICLES / SIGNAL / AERO RUNNER X</span><i /></div>}<Phase6Controls config={config as unknown as Record<string,string>} mutate={(next) => mutate(next as Config)} part={part} setPart={setPart} onExplode={() => setExploded(v => !v)} onXray={() => setXray(v => !v)} onReset={() => { mutate(defaults); setExploded(false); setXray(false); }} onRandomize={randomize} onAdd={add} onRotate={() => setToast("ROTATE") } onZoom={() => setToast("ZOOM") } /><footer className="config-bottom"><button title="Explode parts" aria-label="Explode parts" onClick={() => setExploded((v) => !v)} className={exploded ? "active" : ""}><Split size={15} /> Explode</button><button title="Toggle X-Ray" aria-label="Toggle X-Ray" onClick={() => setXray((v) => !v)} className={xray ? "active" : ""}>{xray ? <EyeOff size={15} /> : <Eye size={15} />} X-Ray</button><button title="Reset configuration" aria-label="Reset configuration" onClick={() => mutate(defaults)}><RotateCcw size={15} /> Reset</button><button title="Randomize configuration" aria-label="Randomize configuration" onClick={randomize}><Shuffle size={15} /> Randomize</button><button title="Download screenshot" aria-label="Download screenshot" onClick={screenshot}><Camera size={15} /> Screenshot</button><div className="bottom-keys"><kbd>R</kbd> Reset <kbd>E</kbd> Explode <kbd>X</kbd> X-Ray</div></footer>{toast && <div className="config-toast"><Sparkles size={14} /> {toast}</div>}<div className="config-help"><PackageCheck size={13} /> Ships worldwide · 30-day returns</div></div>;
+  const [config, setConfig] = useState<Config>(parseConfig);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [part, setPart] = useState<Part>("upper");
+  const [hoverPart, setHoverPart] = useState<Part | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [exploded, setExploded] = useState(false);
+  const [xray, setXray] = useState(false);
+  const [added, setAdded] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [toast, setToast] = useState("");
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setLoading(false),
+      reduced ? 350 : 1250
+    );
+    return () => window.clearTimeout(timer);
+  }, [reduced]);
+  const total = useMemo(
+    () =>
+      prices.base +
+      (config.upperMat === "leather"
+        ? prices.leather
+        : config.upperMat === "suede"
+          ? prices.suede
+          : 0) +
+      (config.sole !== defaults.sole ? prices.soleCustom : 0) +
+      (config.laces !== defaults.laces ? prices.lacesCustom : 0),
+    [config]
+  );
+  const mutate = (next: Config) => {
+    setConfig(next);
+    setSyncing(true);
+    window.setTimeout(() => setSyncing(false), 650);
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (key === "r") {
+        mutate(defaults);
+        setExploded(false);
+        setXray(false);
+      }
+      if (key === "e") setExploded(value => !value);
+      if (key === "x") setXray(value => !value);
+      if (key === "arrowleft") setToast("ROTATE LEFT");
+      if (key === "arrowright") setToast("ROTATE RIGHT");
+      if (["1", "2", "3", "4", "5"].includes(key))
+        setPart(parts[Number(key) - 1].id);
+      if (key === "escape") goHome();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const goHome = () => {
+    window.history.pushState({}, "", "/");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const share = () => {
+    const params = new URLSearchParams({
+      upper: config.upper,
+      upperMat: config.upperMat,
+      sole: config.sole,
+      laces: config.laces,
+      size: config.size,
+    });
+    const url = `${window.location.origin}/product/sneaker?${params}`;
+    navigator.clipboard?.writeText(url);
+    window.history.replaceState({}, "", `/product/sneaker?${params}`);
+    setToast("BUILD LINK COPIED");
+    window.setTimeout(() => setToast(""), 2200);
+  };
+  const setSize = (size: string) => {
+    setConfig(current => ({ ...current, size }));
+    const next = new URLSearchParams(window.location.search);
+    next.set("size", size);
+    window.history.replaceState({}, "", `${window.location.pathname}?${next}`);
+  };
+  const add = () => {
+    localStorage.setItem("holo-aero-runner-build", JSON.stringify(config));
+    addToCart(aeroProduct, {
+      price: total,
+      size: config.size,
+      configuration: `${config.upperMat} · ${config.upper}`,
+    });
+    setAdded(true);
+    setToast("ADDED TO COLLECTION");
+    window.setTimeout(() => setToast(""), 2200);
+  };
+  const randomize = () =>
+    mutate({
+      ...config,
+      upper: colors[Math.floor(Math.random() * colors.length)],
+      sole: colors[Math.floor(Math.random() * colors.length)],
+      laces: colors[Math.floor(Math.random() * colors.length)],
+      upperMat: ["mesh", "leather", "suede"][Math.floor(Math.random() * 3)],
+    });
+  const screenshot = () => {
+    const c = document.createElement("canvas");
+    c.width = 1200;
+    c.height = 700;
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#050508";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = config.upper;
+    ctx.shadowColor = config.upper;
+    ctx.shadowBlur = 50;
+    ctx.beginPath();
+    ctx.ellipse(600, 350, 260, 100, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    const a = document.createElement("a");
+    a.download = "aero-runner-x-hologram.png";
+    a.href = c.toDataURL();
+    a.click();
+    setToast("SCREENSHOT SAVED");
+    window.setTimeout(() => setToast(""), 2200);
+  };
+  return (
+    <div className="configurator">
+      <div className="configurator-grid" />
+      <div className="corner corner--tl" />
+      <div className="corner corner--tr" />
+      <div className="corner corner--bl" />
+      <div className="corner corner--br" />
+      <header className="config-topbar">
+        <button className="config-back" onClick={goHome}>
+          <ArrowLeft size={16} /> <span>Back</span>
+        </button>
+        <div className="config-title">
+          <span>AERO RUNNER X</span>
+          <small>HOLO OBJECT / SNEAKER / 001</small>
+        </div>
+        <div className="config-top-actions">
+          <button
+            className="mini-price"
+            onClick={() => setSummaryOpen(value => !value)}
+            aria-label="Open live price summary"
+          >
+            ${total.toFixed(2)}
+          </button>
+          <a href="/cart" aria-label="Cart">
+            <ShoppingBag size={17} />
+          </a>
+        </div>
+      </header>
+      <main className="config-main">
+        <SidePanel
+          part={part}
+          config={config}
+          setPart={setPart}
+          setConfig={mutate}
+        />
+        <section className="config-stage">
+          <div className="stage-signal">
+            <span className="status-dot" /> LIVE HOLOGRAM / SIGNAL 98.4%
+          </div>
+          <div className={`holo-stage ${syncing ? "holo-stage--syncing" : ""}`}>
+            <HoloCanvas
+              config={config}
+              activePart={part}
+              hoverPart={hoverPart}
+              exploded={exploded}
+              xray={xray}
+              syncing={syncing}
+              reduced={reduced}
+              onPartHover={setHoverPart}
+              onPartClick={setPart}
+            />
+            <div
+              className={`holo-label holo-label--upper ${hoverPart ? "holo-label--visible" : ""}`}
+            >
+              {(hoverPart || part).toUpperCase()} /{" "}
+              {hoverPart ? "HOVER" : "FOCUS"}
+            </div>
+          </div>
+          <div className="stage-status">
+            <span>{syncing ? "SYNCING…" : "DRAG TO ROTATE"}</span>
+            <span>GRID / 04 · 23 · 11</span>
+          </div>
+        </section>
+        <RightPanel
+          config={config}
+          total={total}
+          added={added}
+          open={summaryOpen}
+          onClose={() => setSummaryOpen(false)}
+          onSize={setSize}
+          onAdd={add}
+          onShare={share}
+        />
+      </main>
+      {loading && (
+        <div className="config-loading">
+          <div className="loading-avatar">
+            <div className="avatar-core avatar-core--2" />
+          </div>
+          <strong>ASSEMBLING HOLOGRAM…</strong>
+          <span>PARTICLES / SIGNAL / AERO RUNNER X</span>
+          <i />
+        </div>
+      )}
+      <Phase6Controls
+        config={config as unknown as Record<string, string>}
+        mutate={next => mutate(next as Config)}
+        part={part}
+        setPart={setPart}
+        onExplode={() => setExploded(v => !v)}
+        onXray={() => setXray(v => !v)}
+        onReset={() => {
+          mutate(defaults);
+          setExploded(false);
+          setXray(false);
+        }}
+        onRandomize={randomize}
+        onAdd={add}
+        onRotate={() => setToast("ROTATE")}
+        onZoom={() => setToast("ZOOM")}
+      />
+      <footer className="config-bottom">
+        <button
+          title="Explode parts"
+          aria-label="Explode parts"
+          onClick={() => setExploded(v => !v)}
+          className={exploded ? "active" : ""}
+        >
+          <Split size={15} /> Explode
+        </button>
+        <button
+          title="Toggle X-Ray"
+          aria-label="Toggle X-Ray"
+          onClick={() => setXray(v => !v)}
+          className={xray ? "active" : ""}
+        >
+          {xray ? <EyeOff size={15} /> : <Eye size={15} />} X-Ray
+        </button>
+        <button
+          title="Reset configuration"
+          aria-label="Reset configuration"
+          onClick={() => mutate(defaults)}
+        >
+          <RotateCcw size={15} /> Reset
+        </button>
+        <button
+          title="Randomize configuration"
+          aria-label="Randomize configuration"
+          onClick={randomize}
+        >
+          <Shuffle size={15} /> Randomize
+        </button>
+        <button
+          title="Download screenshot"
+          aria-label="Download screenshot"
+          onClick={screenshot}
+        >
+          <Camera size={15} /> Screenshot
+        </button>
+        <div className="bottom-keys">
+          <kbd>R</kbd> Reset <kbd>E</kbd> Explode <kbd>X</kbd> X-Ray
+        </div>
+      </footer>
+      {toast && (
+        <div className="config-toast">
+          <Sparkles size={14} /> {toast}
+        </div>
+      )}
+      <div className="config-help">
+        <PackageCheck size={13} /> Ships worldwide · 30-day returns
+      </div>
+    </div>
+  );
 }

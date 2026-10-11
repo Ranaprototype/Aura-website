@@ -1,8 +1,165 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, GitCompare, Sparkles } from "lucide-react";
 import { products, productHref, type Product } from "../lib/catalog";
-export function CategoryBackdrop({category}:{category:string}){const slug=category.toLowerCase().replace(/\s/g,"-");return <div className={`phase6-backdrop phase6-backdrop--${slug}`} aria-hidden="true"><i/><i/><i/></div>}
-export function CuratedForYou({product}:{product:Product}){const [reason]=useState(()=>{const saved=localStorage.getItem("holo.recommendation-color")||"violet";return `Because you like ${saved} ${product.category.toLowerCase()}.`});const picks=useMemo(()=>products.filter(p=>p.slug!==product.slug&& (p.categorySlug===product.categorySlug||p.tone===product.tone)).slice(0,3),[product]);return <section className="curated-section"><div><span className="mono-label">CURATED FOR YOU</span><h2>Objects with a similar <em>signal.</em></h2><p>{reason}</p></div><div className="curated-grid">{picks.map(p=><a href={productHref(p)} key={p.slug}><div className={`catalog-visual catalog-visual--${p.tone}`}><div className={`catalog-shape catalog-shape--${p.kind}`}/></div><strong>{p.name}</strong><span>{p.category} · ${p.price.toLocaleString()}</span></a>)}</div></section>}
-export function ProductKeyboardHint(){const [show,setShow]=useState(()=>!sessionStorage.getItem("holo.phase6.hint"));useEffect(()=>{if(show){const t=setTimeout(()=>{setShow(false);sessionStorage.setItem("holo.phase6.hint","1")},6000);return()=>clearTimeout(t)}},[show]);return show?<div className="phase6-key-hint">Press <kbd>?</kbd> for shortcuts</div>:null}
-export function CompareEntry({category}:{category:string}){const same=products.filter(p=>p.category===category).slice(0,3);return <div className="compare-entry"><div><span className="mono-label">DECIDE TOGETHER</span><h3>Compare up to three {category.toLowerCase()}.</h3><p>See price, parts, materials, and specs in one shared view.</p></div><a className="button button--ghost" href={`/compare?products=${same.map(p=>p.slug).join(",")}`}><GitCompare size={15}/> Open comparison <ArrowRight size={14}/></a></div>}
-export function ComparisonPage({slugs}:{slugs:string[]}){const selected=products.filter(p=>slugs.includes(p.slug)).slice(0,3);return <div className="comparison-page"><header className="comparison-top"><a href="/catalog">HOLO</a><span className="mono-label">OBJECT COMPARISON / {selected.length.toString().padStart(2,"0")}</span></header><main><span className="mono-label">COMPARE THE SIGNAL</span><h1>Choose with <em>clarity.</em></h1><div className="comparison-grid">{selected.map(p=><article key={p.slug}><div className={`catalog-visual catalog-visual--${p.tone}`}><div className={`catalog-shape catalog-shape--${p.kind}`}/></div><span className="mono-label">{p.category}</span><h2>{p.name}</h2><strong>${p.price.toLocaleString()}</strong><p>{p.description}</p><a className="button button--primary" href={productHref(p)}>Customize this one <Check size={14}/></a></article>)}</div><table className="comparison-table"><thead><tr><th>Specification</th>{selected.map(p=><th key={p.slug}>{p.name}</th>)}</tr></thead><tbody>{["Price","Category","Brand","Available sizes","Material system"].map(row=><tr key={row}><th>{row}</th>{selected.map(p=><td key={p.slug}>{row==="Price"?`$${p.price.toLocaleString()}`:row==="Category"?p.category:row==="Brand"?(p as any).brand || "HOLO":row==="Available sizes"?"6 — 12":"Configurable"}</td>)}</tr>)}</tbody></table></main></div>}
+export function CategoryBackdrop({ category }: { category: string }) {
+  const slug = category.toLowerCase().replace(/\s/g, "-");
+  return (
+    <div
+      className={`phase6-backdrop phase6-backdrop--${slug}`}
+      aria-hidden="true"
+    >
+      <i />
+      <i />
+      <i />
+    </div>
+  );
+}
+export function CuratedForYou({ product }: { product: Product }) {
+  const [reason] = useState(() => {
+    const saved = localStorage.getItem("holo.recommendation-color") || "violet";
+    return `Because you like ${saved} ${product.category.toLowerCase()}.`;
+  });
+  const picks = useMemo(
+    () =>
+      products
+        .filter(
+          p =>
+            p.slug !== product.slug &&
+            (p.categorySlug === product.categorySlug || p.tone === product.tone)
+        )
+        .slice(0, 3),
+    [product]
+  );
+  return (
+    <section className="curated-section">
+      <div>
+        <span className="mono-label">CURATED FOR YOU</span>
+        <h2>
+          Objects with a similar <em>signal.</em>
+        </h2>
+        <p>{reason}</p>
+      </div>
+      <div className="curated-grid">
+        {picks.map(p => (
+          <a href={productHref(p)} key={p.slug}>
+            <div className={`catalog-visual catalog-visual--${p.tone}`}>
+              <div className={`catalog-shape catalog-shape--${p.kind}`} />
+            </div>
+            <strong>{p.name}</strong>
+            <span>
+              {p.category} · ${p.price.toLocaleString()}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+export function ProductKeyboardHint() {
+  const [show, setShow] = useState(
+    () => !sessionStorage.getItem("holo.phase6.hint")
+  );
+  useEffect(() => {
+    if (show) {
+      const t = setTimeout(() => {
+        setShow(false);
+        sessionStorage.setItem("holo.phase6.hint", "1");
+      }, 6000);
+      return () => clearTimeout(t);
+    }
+  }, [show]);
+  return show ? (
+    <div className="phase6-key-hint">
+      Press <kbd>?</kbd> for shortcuts
+    </div>
+  ) : null;
+}
+export function CompareEntry({ category }: { category: string }) {
+  const same = products.filter(p => p.category === category).slice(0, 3);
+  return (
+    <div className="compare-entry">
+      <div>
+        <span className="mono-label">DECIDE TOGETHER</span>
+        <h3>Compare up to three {category.toLowerCase()}.</h3>
+        <p>See price, parts, materials, and specs in one shared view.</p>
+      </div>
+      <a
+        className="button button--ghost"
+        href={`/compare?products=${same.map(p => p.slug).join(",")}`}
+      >
+        <GitCompare size={15} /> Open comparison <ArrowRight size={14} />
+      </a>
+    </div>
+  );
+}
+export function ComparisonPage({ slugs }: { slugs: string[] }) {
+  const selected = products.filter(p => slugs.includes(p.slug)).slice(0, 3);
+  return (
+    <div className="comparison-page">
+      <header className="comparison-top">
+        <a href="/catalog">HOLO</a>
+        <span className="mono-label">
+          OBJECT COMPARISON / {selected.length.toString().padStart(2, "0")}
+        </span>
+      </header>
+      <main>
+        <span className="mono-label">COMPARE THE SIGNAL</span>
+        <h1>
+          Choose with <em>clarity.</em>
+        </h1>
+        <div className="comparison-grid">
+          {selected.map(p => (
+            <article key={p.slug}>
+              <div className={`catalog-visual catalog-visual--${p.tone}`}>
+                <div className={`catalog-shape catalog-shape--${p.kind}`} />
+              </div>
+              <span className="mono-label">{p.category}</span>
+              <h2>{p.name}</h2>
+              <strong>${p.price.toLocaleString()}</strong>
+              <p>{p.description}</p>
+              <a className="button button--primary" href={productHref(p)}>
+                Customize this one <Check size={14} />
+              </a>
+            </article>
+          ))}
+        </div>
+        <table className="comparison-table">
+          <thead>
+            <tr>
+              <th>Specification</th>
+              {selected.map(p => (
+                <th key={p.slug}>{p.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              "Price",
+              "Category",
+              "Brand",
+              "Available sizes",
+              "Material system",
+            ].map(row => (
+              <tr key={row}>
+                <th>{row}</th>
+                {selected.map(p => (
+                  <td key={p.slug}>
+                    {row === "Price"
+                      ? `$${p.price.toLocaleString()}`
+                      : row === "Category"
+                        ? p.category
+                        : row === "Brand"
+                          ? (p as any).brand || "HOLO"
+                          : row === "Available sizes"
+                            ? "6 — 12"
+                            : "Configurable"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </main>
+    </div>
+  );
+}

@@ -1,5 +1,149 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowRight, LockKeyhole, UserRound, X } from "lucide-react";
-export default function AccountModal(){const [open,setOpen]=useState(false);const [mode,setMode]=useState<"signin"|"create">("signin");const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [name,setName]=useState("");const [message,setMessage]=useState("");useEffect(()=>{const handler=()=>setOpen(true);window.addEventListener("holo-open-account",handler);return()=>window.removeEventListener("holo-open-account",handler)},[]);if(!open)return <button className="account-launcher" onClick={()=>setOpen(true)} aria-label="Open account"><UserRound size={15}/><span>Account</span></button>;const submit=(e:FormEvent)=>{e.preventDefault();if(!email||!password||(mode==="create"&&!name)){setMessage("Complete the required fields to continue.");return}localStorage.setItem("holo.user",JSON.stringify({email,name:name||email.split("@")[0],createdAt:new Date().toISOString()}));setMessage(mode==="create"?"Account created locally.":"Signed in locally.");window.setTimeout(()=>{setOpen(false);window.location.href="/account"},600)};return <div className="account-modal-backdrop" onClick={()=>setOpen(false)}><section className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-modal-title" onClick={e=>e.stopPropagation()}><button className="account-modal-close" onClick={()=>setOpen(false)} aria-label="Close account modal"><X size={17}/></button><div className="account-modal-icon"><LockKeyhole size={17}/></div><span className="mono-label">HOLO / {mode==="signin"?"SIGN IN":"CREATE ACCOUNT"}</span><h2 id="account-modal-title">{mode==="signin"?"Welcome back.":"Make space for more."}</h2><p>{mode==="signin"?"Sign in to see your orders and saved objects.":"Create a simulated account to save your HOLO journey."}</p><div className="account-tabs"><button className={mode==="signin"?"active":""} onClick={()=>{setMode("signin");setMessage("")}}>Sign in</button><button className={mode==="create"?"active":""} onClick={()=>{setMode("create");setMessage("")}}>Create account</button></div><form onSubmit={submit}>{mode==="create"&&<label>Name<input autoFocus value={name} onChange={e=>setName(e.target.value)} autoComplete="name"/></label>}<label>Email<input autoFocus={mode==="signin"} type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==="signin"?"current-password":"new-password"}/></label>{message&&<p className="account-modal-message" role="status">{message}</p>}<button className="button button--primary" type="submit">{mode==="signin"?"Sign in":"Create account"}<ArrowRight size={15}/></button></form><small>Demo only — no real authentication is performed.</small></section></div>}
-export function openAccount(){window.dispatchEvent(new Event("holo-open-account"))}
+export default function AccountModal() {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"signin" | "create">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("holo-open-account", handler);
+    return () => window.removeEventListener("holo-open-account", handler);
+  }, []);
+  if (!open)
+    return (
+      <button
+        className="account-launcher"
+        onClick={() => setOpen(true)}
+        aria-label="Open account"
+      >
+        <UserRound size={15} />
+        <span>Account</span>
+      </button>
+    );
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || (mode === "create" && !name)) {
+      setMessage("Complete the required fields to continue.");
+      return;
+    }
+    localStorage.setItem(
+      "holo.user",
+      JSON.stringify({
+        email,
+        name: name || email.split("@")[0],
+        createdAt: new Date().toISOString(),
+      })
+    );
+    setMessage(
+      mode === "create" ? "Account created locally." : "Signed in locally."
+    );
+    window.setTimeout(() => {
+      setOpen(false);
+      window.location.href = "/account";
+    }, 600);
+  };
+  return (
+    <div className="account-modal-backdrop" onClick={() => setOpen(false)}>
+      <section
+        className="account-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-modal-title"
+        onClick={e => e.stopPropagation()}
+      >
+        <button
+          className="account-modal-close"
+          onClick={() => setOpen(false)}
+          aria-label="Close account modal"
+        >
+          <X size={17} />
+        </button>
+        <div className="account-modal-icon">
+          <LockKeyhole size={17} />
+        </div>
+        <span className="mono-label">
+          HOLO / {mode === "signin" ? "SIGN IN" : "CREATE ACCOUNT"}
+        </span>
+        <h2 id="account-modal-title">
+          {mode === "signin" ? "Welcome back." : "Make space for more."}
+        </h2>
+        <p>
+          {mode === "signin"
+            ? "Sign in to see your orders and saved objects."
+            : "Create a simulated account to save your HOLO journey."}
+        </p>
+        <div className="account-tabs">
+          <button
+            className={mode === "signin" ? "active" : ""}
+            onClick={() => {
+              setMode("signin");
+              setMessage("");
+            }}
+          >
+            Sign in
+          </button>
+          <button
+            className={mode === "create" ? "active" : ""}
+            onClick={() => {
+              setMode("create");
+              setMessage("");
+            }}
+          >
+            Create account
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          {mode === "create" && (
+            <label>
+              Name
+              <input
+                autoFocus
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoComplete="name"
+              />
+            </label>
+          )}
+          <label>
+            Email
+            <input
+              autoFocus={mode === "signin"}
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete={
+                mode === "signin" ? "current-password" : "new-password"
+              }
+            />
+          </label>
+          {message && (
+            <p className="account-modal-message" role="status">
+              {message}
+            </p>
+          )}
+          <button className="button button--primary" type="submit">
+            {mode === "signin" ? "Sign in" : "Create account"}
+            <ArrowRight size={15} />
+          </button>
+        </form>
+        <small>Demo only — no real authentication is performed.</small>
+      </section>
+    </div>
+  );
+}
+export function openAccount() {
+  window.dispatchEvent(new Event("holo-open-account"));
+}
