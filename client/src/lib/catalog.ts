@@ -484,14 +484,14 @@ export function getWishlist(): string[] {
       localStorage.getItem("holo-wishlist") ?? "[]"
     );
     if (!Array.isArray(value)) return [];
-    return [
-      ...new Set(
+    return Array.from(
+      new Set(
         value.filter(
           (slug): slug is string =>
             typeof slug === "string" && Boolean(getProduct(slug))
         )
-      ),
-    ];
+      )
+    );
   } catch {
     return [];
   }
