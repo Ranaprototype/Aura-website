@@ -36,6 +36,26 @@ test("catalog → configured object → local cart → unavailable checkout; dir
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", err => errors.push(err.message));
+    await page.goto(origin + "/");
+    await page
+      .getByText("Newsletter enrollment is unavailable.")
+      .waitFor({ state: "attached" });
+    assert.equal(
+      await page.locator("#newsletter input, #newsletter form").count(),
+      0
+    );
+    assert.doesNotMatch(
+      await page.locator("body").innerText(),
+      /secure checkout|30-day returns|free shipping|access granted/i
+    );
+    await page.goto(origin + "/product/sneaker");
+    await page
+      .getByText("Design preview · Not available for purchase")
+      .waitFor({ state: "attached" });
+    assert.doesNotMatch(
+      await page.locator("body").innerText(),
+      /ships worldwide|ships in|30-day returns/i
+    );
     await page.goto(origin + "/catalog");
     await page.locator('a[href^="/products/"]').first().click();
     await page.getByRole("button", { name: "Add to Collection" }).click();

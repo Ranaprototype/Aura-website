@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownRight,
   ArrowRight,
-  Check,
   ChevronDown,
   Command,
   Headphones,
@@ -745,14 +744,14 @@ function Hero() {
 
 function TrustStrip() {
   const items = [
-    "FREE SHIPPING",
-    "30-DAY RETURNS",
-    "CARBON NEUTRAL",
-    "SECURE CHECKOUT",
+    "EXPLORE THE CATALOG",
+    "COLOR STUDIES",
+    "OBJECT CONFIGURATORS",
+    "STOREFRONT PREVIEW",
     "MADE IN LIGHT",
   ];
   return (
-    <div className="trust-strip" aria-label="Our promises">
+    <div className="trust-strip" aria-label="Preview highlights">
       <div className="marquee-track">
         {[...items, ...items].map((item, index) => (
           <span key={`${item}-${index}`}>
@@ -889,12 +888,6 @@ function Manifesto() {
 }
 
 function Newsletter() {
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (email.trim()) setSubmitted(true);
-  };
   return (
     <section
       className="section section--newsletter"
@@ -906,48 +899,20 @@ function Newsletter() {
         <div className="newsletter-copy">
           <MonoLabel>THE INNER CIRCLE / 04</MonoLabel>
           <h2 id="newsletter-title">
-            Join the
+            Explore the
             <br />
-            <em>inner circle.</em>
+            <em>storefront preview.</em>
           </h2>
           <p>
-            Early access to new drops
-            <br />
-            and hologram features.
+            Browse the collection and experiment with object configurations.
           </p>
         </div>
         <div className="newsletter-form-wrap">
-          {submitted ? (
-            <div className="success-state">
-              <span>
-                <Check size={20} />
-              </span>
-              <div>
-                <MonoLabel>ACCESS GRANTED</MonoLabel>
-                <strong>You're in.</strong>
-                <p>We'll keep you close to the light.</p>
-              </div>
-            </div>
-          ) : (
-            <form className="newsletter-form" onSubmit={submit}>
-              <label htmlFor="email" className="sr-only">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                placeholder="your@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-              <button className="button button--primary" type="submit">
-                Enter <ArrowRight size={16} />
-              </button>
-            </form>
-          )}
+          <a className="button button--primary" href="/catalog">
+            Explore objects <ArrowRight size={16} />
+          </a>
           <MonoLabel className="newsletter-note">
-            NO SPAM. UNSUBSCRIBE ANYTIME.
+            Newsletter enrollment is unavailable.
           </MonoLabel>
         </div>
       </Reveal>

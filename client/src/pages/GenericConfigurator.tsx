@@ -243,7 +243,7 @@ export default function GenericConfigurator({ slug }: { slug: string }) {
             <Copy size={15} /> Share build
           </button>
           <p className="generic-note">
-            <PackageCheck size={13} /> Ships worldwide · 30-day returns
+            <PackageCheck size={13} /> Design preview · Not available for purchase
           </p>
         </aside>
       </main>

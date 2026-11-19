@@ -444,8 +444,8 @@ export const getProductConfig = (product: Product): ProductConfig => ({
   specs: [
     { label: "Material", value: product.details[0] },
     { label: "Origin", value: "Designed in light" },
-    { label: "Warranty", value: "2 years" },
-    { label: "Shipping", value: "3–5 days" },
+    { label: "Collection", value: "Design preview" },
+    { label: "Ordering", value: "Unavailable" },
   ],
   parts: [
     {
