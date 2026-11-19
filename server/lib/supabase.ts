@@ -1,28 +1,52 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import type { loadConfig } from "../config";
 
-// supabaseAdmin bypasses RLS. Never expose this client to the browser.
-const url = process.env.SUPABASE_URL;
-const anonKey = process.env.SUPABASE_ANON_KEY;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-export function getSupabaseAnon(): SupabaseClient {
-  if (!url || !anonKey) {
-    throw new Error(
-      "Supabase server anon client is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY."
-    );
-  }
-  return createClient(url, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+export interface DiagnosticsStore {
+  ready(): Promise<void>;
+  recent(): Promise<unknown[]>;
+  add(message: string): Promise<unknown>;
 }
 
-export function getSupabaseAdmin(): SupabaseClient {
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      "Supabase admin client is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
-    );
-  }
-  return createClient(url, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+export function createStore(
+  database: ReturnType<typeof loadConfig>["database"]
+): DiagnosticsStore | undefined {
+  if (!database) return;
+  const client = createClient(database.url, database.key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
   });
+  const fields = "id,message,created_at";
+  return {
+    async ready() {
+      await client
+        .from("hello")
+        .select("id", { head: true })
+        .limit(1)
+        .abortSignal(AbortSignal.timeout(2500))
+        .throwOnError();
+    },
+    async recent() {
+      const { data } = await client
+        .from("hello")
+        .select(fields)
+        .order("created_at", { ascending: false })
+        .limit(50)
+        .abortSignal(AbortSignal.timeout(2500))
+        .throwOnError();
+      return data ?? [];
+    },
+    async add(message) {
+      const { data } = await client
+        .from("hello")
+        .insert({ message })
+        .select(fields)
+        .abortSignal(AbortSignal.timeout(2500))
+        .single()
+        .throwOnError();
+      return data;
+    },
+  };
 }
