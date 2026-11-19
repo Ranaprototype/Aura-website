@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { apiPort } from "./environment";
+
 function safeKey(key: string) {
   if (/^sb_publishable_[\w-]+$/.test(key)) return true;
   try {
@@ -19,20 +21,14 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
       NODE_ENV: z
         .enum(["development", "test", "production"])
         .default("development"),
-      PORT: z.coerce.number().int().min(1).max(65535).default(3001),
       SUPABASE_URL: z.string().url().optional(),
       SUPABASE_ANON_KEY: z.string().refine(safeKey).optional(),
       LOCAL_DIAGNOSTIC_TOKEN: z.string().min(32).optional(),
     })
     .safeParse(env);
   if (!config.success) throw new Error("Invalid server configuration");
-  const {
-    NODE_ENV,
-    PORT,
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-    LOCAL_DIAGNOSTIC_TOKEN,
-  } = config.data;
+  const { NODE_ENV, SUPABASE_URL, SUPABASE_ANON_KEY, LOCAL_DIAGNOSTIC_TOKEN } =
+    config.data;
   if (Boolean(SUPABASE_URL) !== Boolean(SUPABASE_ANON_KEY))
     throw new Error("Database settings must be supplied together");
   const url = SUPABASE_URL ? new URL(SUPABASE_URL) : undefined;
@@ -51,7 +47,7 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
       "Diagnostics require a local test database outside production"
     );
   return {
-    port: PORT,
+    port: apiPort(env.PORT),
     database:
       SUPABASE_URL && SUPABASE_ANON_KEY
         ? { url: SUPABASE_URL, key: SUPABASE_ANON_KEY }

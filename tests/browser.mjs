@@ -85,12 +85,12 @@ test("catalog → configured object → local cart → unavailable checkout; dir
     for (const [path, heading] of [
       ["/order/synthetic", "Order verification unavailable."],
       ["/account/orders/synthetic", "Accounts are unavailable."],
-      ["/missing-page", "Page not found."],
     ]) {
       await page.goto(origin + path);
       await page.getByRole("heading", { name: heading }).waitFor();
       assert.equal(await page.locator("input,form,iframe").count(), 0);
     }
+    assert.equal((await page.goto(origin + "/missing-page"))?.status(), 404);
     await page.goto(origin + "/test-supabase");
     await page.getByText("Database unavailable.").waitFor();
     assert.deepEqual(errors, []);

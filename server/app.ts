@@ -1,5 +1,6 @@
 import express from "express";
 import path from "node:path";
+import { isRetiredPath, isStorefrontPath } from "../shared/routes";
 import { diagnostics } from "./modules/diagnostics";
 import type { DiagnosticsStore } from "./lib/supabase";
 import { errors, fail } from "./http/errors";
@@ -30,10 +31,15 @@ export function createApp({
     diagnostics(store, diagnosticToken),
     (_req, res) => fail(res, 404, "not_found")
   );
+  app.use((req, res, next) =>
+    isRetiredPath(req.path) ? fail(res, 410, "gone") : next()
+  );
   if (staticPath) {
     app.use(express.static(staticPath));
-    app.get("*", (_req, res) =>
-      res.sendFile(path.join(staticPath, "index.html"))
+    app.get("*", (req, res) =>
+      isStorefrontPath(req.path)
+        ? res.sendFile(path.join(staticPath, "index.html"))
+        : fail(res, 404, "not_found")
     );
   }
   app.use(errors);
