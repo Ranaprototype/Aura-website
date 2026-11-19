@@ -21,7 +21,11 @@ const headers = {
 const store = {
   ready: vi.fn(async () => {}),
   recent: vi.fn(async () => []),
-  add: vi.fn(async (message: string) => ({ message })),
+  add: vi.fn(async (message: string) => ({
+    message,
+    id: "99b48125-e2d2-4592-9a6c-7b8d6d16b632",
+    created_at: "2026-11-19T00:00:00Z",
+  })),
 };
 const servers: Server[] = [];
 async function listen(app: ReturnType<typeof createApp>) {
