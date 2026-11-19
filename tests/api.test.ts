@@ -74,11 +74,12 @@ it.each(["/hello", "/orders", "/payments", "/auth/login", "/unknown"])(
   }
 );
 it("denies missing, incorrect and browser-origin credentials before processing input", async () => {
-  for (const extra of [
+  const cases: Record<string, string>[] = [
     {},
     { Authorization: "Bearer wrong" },
     { Authorization: headers.Authorization, Origin: "https://example.invalid" },
-  ]) {
+  ];
+  for (const extra of cases) {
     await failure(
       await fetch(`${base}/hello`, {
         method: "POST",
