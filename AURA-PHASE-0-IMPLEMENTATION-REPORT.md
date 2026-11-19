@@ -2,6 +2,17 @@
 
 **GO for review of local containment and foundation. NO-GO for customer use, deployment, live payments or Phase 1.** Source-level remediation is not incident closure. No credentials, customer data, deployed databases, historical browser records or external infrastructure were used to exercise the application.
 
+## Review corrections since `0673bd6`
+
+All six review findings are addressed locally; formal acceptance is pending review. The original change units and verification below are historical evidence for the first submission.
+
+- **M1:** The adapter validates actual transport status/content type before the SDK handles the response, and validates bounded row representations afterwards. Reads require 200/206 JSON; insertion requires 201, a UUID and timestamp and the submitted message. Empty 404s fail all three routes. Integration tests run the real router, adapter and SDK against a controlled loopback HTTP server, including a real stalled request. Public errors remain generic.
+- **M2:** The storefront identifies the experience as a preview. Unsupported checkout, enrollment, shipping, return and warranty claims were removed from the audited views/specs. Newsletter email input and the local “access granted” state no longer exist.
+- **M3:** Both cart summaries use the same calculation and rendering, and quick cart displays the same total. Existing standard drawer rules were retained: the preview shipping threshold is 150 after an applied discount, not after gift wrap. Costs are display estimates only, computed in cents. An unapplied promo draft no longer changes the total.
+- **Other findings:** Legacy service namespaces return 410; missing assets return 404 instead of HTML. Known frontend routes still load. Vite and Express share API port parsing and environment precedence. Wishlist reads validate stored JSON, drop invalid/stale references in memory, and do not write during reads.
+- **Verification:** `corepack pnpm check`, `test` (90/90 across 7 suites), `build`, `test:browser` with disposable Chromium (1/1), and both `audit --json` and `audit --prod --json` passed. Both audits reported zero findings (496 full graph, 224 production). Vite dev and preview also passed local 410/404/200 probes and rendered the checkout deep link. No hosted CI run. Intermediate typecheck issues involving Vite config inference and wishlist Set iteration were corrected before the final run.
+- **Unchanged boundaries:** no SQL/migration, dependency, CI workflow, master, payment or deployment changes. Direct Supabase grants/RLS, incident scope and secret rotation require owner evidence. Private staging is pending. No shared database connection, push or merge.
+
 ## Provenance and change units
 
 Repository `Ranaprototype/Aura-website`; official base `9a7a105235e30e75857d9e1dd51e253c0588e8b0`. Approved audit `4e7da8493b46b57617635b4e337f62acde82f870`. Work only on `arena/98dec408-aura-website`. Master untouched; no push, PR, merge, deployment or infrastructure change.

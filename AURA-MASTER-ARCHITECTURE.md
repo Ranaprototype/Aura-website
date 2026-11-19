@@ -6,7 +6,7 @@
 
 ## Local boot (repository root)
 
-Use Node 22.22.3 and Corepack with the pnpm version in `package.json`. `corepack pnpm install --frozen-lockfile --ignore-scripts`. In separate terminals run `corepack pnpm dev:api` (127.0.0.1:3001) and `corepack pnpm dev` (127.0.0.1:3000). Browse the latter; requests to `/api` are proxied, never addressed to a backend host in browser code. `PORT` changes the API port, not the UI port. Restart both after configuration changes. DB configuration is optional; without it, readiness is unavailable by design. For the built app run `corepack pnpm build` then `corepack pnpm start` from root. This is a local verification path, not deployment approval.
+Use Node 22.22.3 and Corepack with the pnpm version in `package.json`. `corepack pnpm install --frozen-lockfile --ignore-scripts`. In separate terminals run `corepack pnpm dev:api` (127.0.0.1:3001) and `corepack pnpm dev` (127.0.0.1:3000). Browse the latter; requests to `/api` are proxied, never addressed to a backend host in browser code. `PORT` changes the API port, not the UI port. Both tools use the same server setting: shell first, then repository `.env.local`, otherwise 3001. Mode-specific Vite env files do not select the API listener. Restart both after configuration changes. DB configuration is optional; without it, readiness is unavailable by design. For the built app run `corepack pnpm build` then `corepack pnpm start` from root. This is a local verification path, not deployment approval.
 
 ## Future contracts (ownership decisions, not implemented services)
 
