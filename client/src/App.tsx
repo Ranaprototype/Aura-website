@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Home from "./pages/Home";
-import ProductPage from "./pages/ProductPage";
+import { CommerceStatus } from "./components/CommerceStatus";
 import SneakerConfigurator from "./pages/SneakerConfigurator";
 import CatalogPage from "./pages/CatalogPage";
 import CategoryPage from "./pages/CategoryPage";
 import { getCategory } from "./lib/catalog";
 import GenericConfigurator from "./pages/GenericConfigurator";
-import { getProduct } from "./lib/catalog";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
@@ -17,16 +16,17 @@ import { ComparisonPage } from "./components/Phase6ProductExtras";
 import TestSupabase from "./pages/TestSupabase";
 
 function Router() {
-  const [path, setPath] = useState(() => window.location.pathname);
+  const currentPath = () => window.location.pathname.replace(/\/+$/, "") || "/";
+  const [path, setPath] = useState(currentPath);
 
   useEffect(() => {
-    const onPopState = () => setPath(window.location.pathname);
+    const onPopState = () => setPath(currentPath());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   if (path === "/test-supabase") return <TestSupabase />;
-  if (path.startsWith("/compare")) {
+  if (path === "/compare") {
     const slugs =
       new URLSearchParams(window.location.search).get("products")?.split(",") ||
       [];
@@ -75,14 +75,11 @@ function Router() {
         <CommerceOverlay />
       </>
     );
-  const match = path.match(/^\/products\/([^/]+)\/?$/);
-  const product = match ? getProduct(match[1]) : undefined;
-  if (match && product)
+  if (path !== "/")
     return (
-      <>
-        <ProductPage product={product} />
-        <CommerceOverlay />
-      </>
+      <CommerceStatus section="Navigation" title="Page not found.">
+        <p>There is no page at this address.</p>
+      </CommerceStatus>
     );
   return (
     <>
@@ -96,6 +93,16 @@ function GlobalPhase6() {
   useEffect(() => {
     let g = false;
     const on = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        (e.target instanceof HTMLElement &&
+          (e.target.isContentEditable ||
+            e.target.closest("input,textarea,select")))
+      )
+        return;
       if (e.key.toLowerCase() === "g") {
         g = true;
         window.setTimeout(() => (g = false), 900);

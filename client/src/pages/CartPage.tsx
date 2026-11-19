@@ -82,7 +82,7 @@ export default function CartPage() {
                 <h1>Your cart.</h1>
               </div>
               <span className="cart-status">
-                <ShieldCheck size={15} /> Secure local session
+                <ShieldCheck size={15} /> Local cart preview
               </span>
             </div>
             <div className="cart-layout">
@@ -97,7 +97,7 @@ export default function CartPage() {
                       <h2>{item.name}</h2>
                       <p>
                         {item.size ? `Size ${item.size} · ` : ""}
-                        {item.configuration || "Ready to ship"}
+                        {item.configuration || "Standard configuration"}
                       </p>
                       <strong>${item.price.toLocaleString()}.00</strong>
                     </div>

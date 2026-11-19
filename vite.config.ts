@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => ({
     },
     fs: {
       strict: true,
-      deny: ["**/.*", "**/.*/**", "**/*.{crt,pem}", "**/.git/**"],
+      deny: ["**/.*", "**/*.{crt,pem}", "**/.git/**"],
     },
   },
 }));
