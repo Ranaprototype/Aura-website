@@ -117,8 +117,9 @@ export default function GenericConfigurator({ slug }: { slug: string }) {
             className="generic-heart"
             aria-label="Toggle wishlist"
             onClick={() => {
-              toggleWishlist(product.slug);
-              setWishlisted(value => !value);
+              setWishlisted(
+                toggleWishlist(product.slug).includes(product.slug)
+              );
             }}
           >
             <Heart size={16} fill={wishlisted ? "currentColor" : "none"} />
@@ -243,7 +244,8 @@ export default function GenericConfigurator({ slug }: { slug: string }) {
             <Copy size={15} /> Share build
           </button>
           <p className="generic-note">
-            <PackageCheck size={13} /> Ships worldwide · 30-day returns
+            <PackageCheck size={13} /> Design preview · Not available for
+            purchase
           </p>
         </aside>
       </main>

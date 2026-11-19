@@ -530,7 +530,7 @@ function RightPanel({
           ))}
         </div>
         <small className="stock-note">
-          <span className="status-dot" /> Ships in 3–5 days · size {config.size}
+          <span className="status-dot" /> Configuration preview · size {config.size}
         </small>
       </div>
       <div className="price-breakdown">
@@ -834,7 +834,7 @@ export default function SneakerConfigurator() {
         </div>
       )}
       <div className="config-help">
-        <PackageCheck size={13} /> Ships worldwide · 30-day returns
+        <PackageCheck size={13} /> Design preview · Not available for purchase
       </div>
     </div>
   );

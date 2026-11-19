@@ -1,6 +1,8 @@
-﻿# Security Policy
+# Security Policy
 
-## Critical - Current Status
+> Historical incident record, not a description of this checkout. Rotation and exposure require owner evidence. See [current security standards](AURA-SECURITY-STANDARDS.md). Do not delete or inspect historical data as part of Phase 0.
+
+## Historical status (reported, not newly verified)
 
 - **.project-config.json contains exposed secrets** (JWT_SECRET, Forge API keys, OAuth endpoints, analytics IDs, Cloudflare artifact token/URL).
 - **Status:** NOT committed to git (git repo not initialized). Still present in filesystem. Must be revoked/rotated and removed.

@@ -1,3 +1,4 @@
+import { CartPreviewLines } from "./CartPreviewLines";
 import { useEffect, useRef, useState } from "react";
 import AccountModal from "./AccountModal";
 import {
@@ -11,8 +12,8 @@ import {
 } from "lucide-react";
 import {
   cartCount,
-  cartShipping,
-  cartSubtotal,
+  cartPreview,
+  previewMoney,
   getCartState,
   getSavedForLater,
   removeFromCart,
@@ -26,7 +27,8 @@ import {
 
 export default function CommerceOverlay() {
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState(getCartState);
+  const { items } = cart;
   const [saved, setSaved] = useState<CartItem[]>([]);
   const [promo, setPromoState] = useState("");
   const [promoError, setPromoError] = useState("");
@@ -38,7 +40,7 @@ export default function CommerceOverlay() {
   const timer = useRef<number | undefined>(undefined);
   const sync = () => {
     const s = getCartState();
-    setItems(s.items);
+    setCart(s);
     setSaved(getSavedForLater());
     setPromoState(s.promo || "");
   };
@@ -66,13 +68,7 @@ export default function CommerceOverlay() {
       window.removeEventListener("keydown", key);
     };
   }, []);
-  const subtotal = cartSubtotal(items);
-  const discount =
-    promo === "HOLO10" ? Math.round(subtotal * 0.1 * 100) / 100 : 0;
-  const wrap = items.reduce((s, i) => s + (i.giftWrap ? 5 * i.quantity : 0), 0);
-  const shipping = cartShipping(subtotal - discount);
-  const tax = Math.round((subtotal - discount + wrap) * 0.08 * 100) / 100;
-  const total = subtotal - discount + wrap + shipping + tax;
+  const preview = cartPreview(cart);
   const apply = () => {
     if (promo.toUpperCase() === "HOLO10") {
       setPromo("HOLO10");
@@ -172,7 +168,9 @@ export default function CommerceOverlay() {
                           </button>
                         </div>
                         <strong>
-                          ${(item.price * item.quantity).toLocaleString()}.00
+                          {previewMoney(
+                            Math.round(item.price * 100) * item.quantity
+                          )}
                         </strong>
                       </div>
                     </div>
@@ -190,31 +188,10 @@ export default function CommerceOverlay() {
                 {promoError && <small>{promoError}</small>}
               </div>
               <div className="drawer-summary">
-                <span>
-                  Subtotal <b>${subtotal.toLocaleString()}.00</b>
-                </span>
-                {discount > 0 && (
-                  <span>
-                    HOLO10 <b>−${discount.toLocaleString()}.00</b>
-                  </span>
-                )}
-                {wrap > 0 && (
-                  <span>
-                    Gift wrapping <b>${wrap}.00</b>
-                  </span>
-                )}
-                <span>
-                  Shipping <b>{shipping ? `$${shipping}.00` : "Free"}</b>
-                </span>
-                <span>
-                  Tax estimate <b>${tax.toFixed(2)}</b>
-                </span>
-                <strong>
-                  Total <b>${total.toFixed(2)}</b>
-                </strong>
-                <small>Shipping and taxes calculated at checkout</small>
+                <CartPreviewLines preview={preview} />
+                <small>Preview estimate · Purchases unavailable</small>
                 <a className="button button--primary" href="/checkout">
-                  Checkout <ArrowRight size={15} />
+                  Checkout information <ArrowRight size={15} />
                 </a>
                 <a
                   className="drawer-link"
@@ -241,11 +218,11 @@ export default function CommerceOverlay() {
           {items.slice(0, 3).map(i => (
             <div key={i.id}>
               <span>{i.name}</span>
-              <b>${(i.price * i.quantity).toLocaleString()}.00</b>
+              <b>{previewMoney(Math.round(i.price * 100) * i.quantity)}</b>
             </div>
           ))}
           <strong>
-            Total <b>${subtotal.toLocaleString()}.00</b>
+            Preview total <b>{previewMoney(preview.total)}</b>
           </strong>
           <button onClick={() => setOpen(true)}>
             View Cart <ArrowRight size={13} />

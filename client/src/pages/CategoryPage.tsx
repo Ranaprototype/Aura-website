@@ -209,9 +209,9 @@ export default function CategoryPage({
         <section className="category-features page-shell">
           {[
             { icon: Sparkles, text: "Made in light" },
-            { icon: ShieldCheck, text: "2-year warranty" },
+            { icon: ShieldCheck, text: "Preview collection" },
             { icon: Zap, text: "Designed for motion" },
-            { icon: Check, text: "30-day returns" },
+            { icon: Check, text: "Explore variations" },
           ].map(({ icon: Icon, text }) => (
             <div key={text}>
               <span>
