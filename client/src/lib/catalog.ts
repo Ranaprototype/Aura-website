@@ -478,18 +478,37 @@ export const getProductConfig = (product: Product): ProductConfig => ({
 export const productConfigs = products.map(getProductConfig);
 export const getProductConfigBySlug = (slug: string) =>
   productConfigs.find(item => item.slug === slug);
+export function getWishlist(): string[] {
+  try {
+    const value: unknown = JSON.parse(
+      localStorage.getItem("holo-wishlist") ?? "[]"
+    );
+    if (!Array.isArray(value)) return [];
+    return [
+      ...new Set(
+        value.filter(
+          (slug): slug is string =>
+            typeof slug === "string" && Boolean(getProduct(slug))
+        )
+      ),
+    ];
+  } catch {
+    return [];
+  }
+}
 export const toggleWishlist = (slug: string) => {
-  const current = JSON.parse(
-    localStorage.getItem("holo-wishlist") || "[]"
-  ) as string[];
+  const current = getWishlist();
+  if (!getProduct(slug)) return current;
   const next = current.includes(slug)
     ? current.filter(item => item !== slug)
     : [...current, slug];
-  localStorage.setItem("holo-wishlist", JSON.stringify(next));
-  return next;
+  try {
+    localStorage.setItem("holo-wishlist", JSON.stringify(next));
+    return next;
+  } catch {
+    return current;
+  }
 };
-export const getWishlist = () =>
-  JSON.parse(localStorage.getItem("holo-wishlist") || "[]") as string[];
 export const rememberProduct = (slug: string) => {
   const current = JSON.parse(
     localStorage.getItem("holo-recent") || "[]"

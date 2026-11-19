@@ -3,19 +3,18 @@ import { getWishlist, products, productHref } from "../lib/catalog";
 
 export default function AccountPage({ path }: { path: string }) {
   if (path === "/account/wishlist") {
-    const saved = new Set(getWishlist());
+    const slugs = new Set(getWishlist());
+    const saved = products.filter(p => slugs.has(p.slug));
     return (
       <CommerceStatus title="Saved objects." section="On this device">
         <p>Your wishlist is local to this browser, not linked to an account.</p>
-        {saved.size ? (
+        {saved.length ? (
           <div className="account-wishlist">
-            {products
-              .filter(p => saved.has(p.slug))
-              .map(p => (
-                <a key={p.slug} href={productHref(p)}>
-                  {p.name}
-                </a>
-              ))}
+            {saved.map(p => (
+              <a key={p.slug} href={productHref(p)}>
+                {p.name}
+              </a>
+            ))}
           </div>
         ) : (
           <p>Nothing saved yet.</p>
