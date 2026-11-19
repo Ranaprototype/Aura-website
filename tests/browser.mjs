@@ -60,6 +60,20 @@ test("catalog → configured object → local cart → unavailable checkout; dir
     await page.locator('a[href^="/products/"]').first().click();
     await page.getByRole("button", { name: "Add to Collection" }).click();
     await page.goto(origin + "/cart");
+    await page.locator(".order-summary").waitFor();
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event("holo-open-cart"))
+    );
+    const pageTotal = page.locator(".order-summary .summary-total b"),
+      drawerTotal = page.locator(".drawer-summary .summary-total b");
+    await drawerTotal.waitFor();
+    const before = await pageTotal.innerText();
+    await page.getByLabel("Promo code").fill("HOLO10");
+    assert.equal(await drawerTotal.innerText(), before);
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    assert.notEqual(await pageTotal.innerText(), before);
+    assert.equal(await drawerTotal.innerText(), await pageTotal.innerText());
+    await page.getByLabel("Close cart").click();
     await page
       .getByRole("link", { name: "Checkout information" })
       .first()

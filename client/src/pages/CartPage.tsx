@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { CartPreviewLines } from "../components/CartPreviewLines";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,12 +8,12 @@ import {
   ShieldCheck,
   ShoppingBag,
   Trash2,
-  Truck,
 } from "lucide-react";
 import {
   cartCount,
-  cartSubtotal,
-  getCart,
+  cartPreview,
+  previewMoney,
+  getCartState,
   removeFromCart,
   updateCartQuantity,
   type CartItem,
@@ -44,18 +45,16 @@ function Visual({ item }: { item: CartItem }) {
   );
 }
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[]>(getCart);
+  const [cart, setCart] = useState(getCartState);
+  const { items } = cart;
   useEffect(() => {
-    const sync = () => setItems(getCart());
+    const sync = () => setCart(getCartState());
     window.addEventListener("holo-cart-change", sync);
     return () => window.removeEventListener("holo-cart-change", sync);
   }, []);
-  const subtotal = useMemo(() => cartSubtotal(items), [items]);
-  const shipping = subtotal >= 200 || subtotal === 0 ? 0 : 18;
-  const total = subtotal + shipping;
   return (
     <div className="commerce-page">
-      <CartHeader count={cartCount()} />
+      <CartHeader count={cartCount(items)} />
       <main className="cart-main page-shell">
         {items.length === 0 ? (
           <section className="cart-empty">
@@ -99,7 +98,9 @@ export default function CartPage() {
                         {item.size ? `Size ${item.size} · ` : ""}
                         {item.configuration || "Standard configuration"}
                       </p>
-                      <strong>${item.price.toLocaleString()}.00</strong>
+                      <strong>
+                        {previewMoney(Math.round(item.price * 100))}
+                      </strong>
                     </div>
                     <div className="quantity-control">
                       <button
@@ -131,29 +132,15 @@ export default function CartPage() {
                 ))}
               </section>
               <aside className="order-summary">
-                <span className="mono-label">ORDER SUMMARY</span>
+                <span className="mono-label">CART PREVIEW</span>
                 <h2>
                   Almost
                   <br />
                   <em>yours.</em>
                 </h2>
                 <div className="summary-lines">
-                  <span>
-                    Subtotal <b>${subtotal.toLocaleString()}.00</b>
-                  </span>
-                  <span>
-                    Shipping <b>{shipping ? `$${shipping}.00` : "Free"}</b>
-                  </span>
-                  <span className="summary-total">
-                    Total <b>${total.toLocaleString()}.00</b>
-                  </span>
+                  <CartPreviewLines preview={cartPreview(cart)} />
                 </div>
-                {subtotal > 0 && subtotal < 200 && (
-                  <div className="shipping-progress">
-                    <Truck size={14} /> Add ${(200 - subtotal).toLocaleString()}
-                    .00 for free shipping.
-                  </div>
-                )}
                 <a
                   className="button button--primary checkout-button"
                   href="/checkout"

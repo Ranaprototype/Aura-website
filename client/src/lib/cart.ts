@@ -115,8 +115,36 @@ export const clearCart = () => {
   notify();
 };
 export const cartProduct = (item: CartItem) => getProduct(item.slug);
-export const cartTax = (items = getCart(), discount = 0) =>
-  Math.round(Math.max(0, cartSubtotal(items) - discount) * 0.08 * 100) / 100;
+// Local design estimates only. Preserve the existing drawer's preview rules;
+// calculate money in cents so both views round at the same points.
+export function cartPreview({ items, promo }: CartState) {
+  const subtotal = items.reduce(
+    (sum, i) => sum + Math.round(i.price * 100) * i.quantity,
+    0
+  );
+  const discount = promo === "HOLO10" ? Math.round(subtotal / 10) : 0;
+  const wrap = items.reduce(
+    (sum, i) => sum + (i.giftWrap ? 500 * i.quantity : 0),
+    0
+  );
+  const shipping = items.length
+    ? cartShipping((subtotal - discount) / 100) * 100
+    : 0;
+  const tax = Math.round((subtotal - discount + wrap) * 0.08);
+  return {
+    subtotal,
+    discount,
+    wrap,
+    shipping,
+    tax,
+    total: subtotal - discount + wrap + shipping + tax,
+  };
+}
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+export const previewMoney = (cents: number) => usd.format(cents / 100);
 
 export const getSavedForLater = (): CartItem[] => {
   try {
