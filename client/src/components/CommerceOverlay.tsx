@@ -212,9 +212,9 @@ export default function CommerceOverlay() {
                 <strong>
                   Total <b>${total.toFixed(2)}</b>
                 </strong>
-                <small>Shipping and taxes calculated at checkout</small>
+                <small>Preview estimate · Purchases unavailable</small>
                 <a className="button button--primary" href="/checkout">
-                  Checkout <ArrowRight size={15} />
+                  Checkout information <ArrowRight size={15} />
                 </a>
                 <a
                   className="drawer-link"

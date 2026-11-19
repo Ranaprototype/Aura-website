@@ -158,10 +158,10 @@ export default function CartPage() {
                   className="button button--primary checkout-button"
                   href="/checkout"
                 >
-                  Proceed to checkout <ArrowRight size={15} />
+                  Checkout information <ArrowRight size={15} />
                 </a>
                 <p className="secure-note">
-                  <ShieldCheck size={13} /> 30-day returns · Secure checkout
+                  <ShieldCheck size={13} /> Preview only · Purchases unavailable
                 </p>
               </aside>
             </div>

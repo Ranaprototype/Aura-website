@@ -39,27 +39,11 @@ function Router() {
         <CommerceOverlay />
       </>
     );
-  if (path === "/checkout")
-    return (
-      <>
-        <CheckoutPage />
-        <CommerceOverlay />
-      </>
-    );
+  if (path === "/checkout") return <CheckoutPage />;
   if (path === "/order-confirmation" || path.startsWith("/order/"))
-    return (
-      <>
-        <OrderConfirmationPage />
-        <CommerceOverlay />
-      </>
-    );
+    return <OrderConfirmationPage />;
   if (path === "/account" || path.startsWith("/account/"))
-    return (
-      <>
-        <AccountPage path={path} />
-        <CommerceOverlay />
-      </>
-    );
+    return <AccountPage path={path} />;
   if (path === "/catalog")
     return (
       <>
