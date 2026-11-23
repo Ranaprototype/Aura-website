@@ -2,9 +2,9 @@
 
 **Disposition: implementation complete and verified locally; not released, not deployed, not pushed, and not a claim of production readiness.** Every check below was executed on the working tree in this repository against disposable local services only. Nothing was run against a shared or production database, and no email left the machine. Phase 3 has not been started and `master` is untouched.
 
-- Baseline commit: `fd1edeede19e9edbb48f08e2b060165933ced974` (`master`, unchanged)
-- Working branch: `arena/0b6d49f9-aura-website`, HEAD still `fd1edee…` — all Phase 2 work is uncommitted working-tree state awaiting human review
-- Changed paths: 11 modified, 24 added (files listed in [Delivery review](#delivery-review))
+- Baseline commit: `fd1edeede19e9edbb48f08e2b060165933ced974` (`master`)
+- Branch `arena/0b6d49f9-aura-website`: `643de43` (Phase 2 work) + `f569bff` (portable browser launch), proposed in PR #3
+- Changed paths: 11 modified, 25 added (files listed in [Delivery review](#delivery-review))
 - Categories used throughout: **Implemented**, **Tested-passed**, **Tested-failed**, **Blocked**, **Requires-owner-config**
 
 ## 1. Exact verification results
@@ -19,6 +19,7 @@ Run from the repository root with Node 22.22.3 / Corepack pnpm 10.34.9, on 2026-
 | `CHROMIUM_PATH=… corepack pnpm test:browser` | **2 files, 2 tests passed, 0 failed** (`browser.mjs` ≈4 s, `browser-auth.mjs` ≈36 s) | 0 |
 | `corepack pnpm install --frozen-lockfile --ignore-scripts` | "Already up to date" — lockfile matches `package.json` | 0 |
 | `git diff --check` | No whitespace/conflict artefacts | 0 |
+| GitHub Actions `verify` (PR #3, run 45198746529, ubuntu-24.04, `google-chrome`) | Frozen install, typecheck, 220 Vitest tests, build, **both browser suites**, high-severity audit — all pass (57 s) | 0 |
 
 Per-file Vitest inventory (all passing):
 
@@ -142,7 +143,7 @@ These are honest gaps. They are **not** covered by the results above.
 | Multi-process / true concurrent pooling under load | **BLOCKED** | PGlite is a single-process WASM PostgreSQL; pool exhaustion and per-transaction identity are reproduced, but contention, deadlock detection and `pg_stat_activity` behaviour under many real backends are not. |
 | Email deliverability (SPF/DKIM/DMARC, provider reputation, bounce handling, inbound replies) | **BLOCKED** | No domain, DNS control or provider account; outbound delivery outside the machine was not attempted. |
 | Production TLS mail path | **BLOCKED** | Only a local plaintext sink was available; the TLS-required branch is config-validated but not exercised against a real TLS relay. |
-| Hosted CI execution of these changes | **BLOCKED** | Work is uncommitted on an unpushed branch; the Phase 0 workflow definition is unchanged and was not run for Phase 2. |
+| Hosted CI as independent evidence | partly covered | The unchanged Phase 0 workflow ran on PR #3 and passed (run 45198746529). Its first attempt failed at the browser step before the launch helper existed; that is fixed and re-verified. CI still runs no database, mail relay or deploy target. |
 | Load, penetration, accessibility and cross-browser audits | **BLOCKED** | Out of scope for this phase; Chromium-only coverage is stated as such. |
 
 ## 6. Requires owner configuration before any real use
@@ -157,13 +158,14 @@ These are honest gaps. They are **not** covered by the results above.
 
 ## 7. Delivery review
 
-Scope: `git status`, full diff read, secret sweep, migration and test review, lockfile verification. No commit, push, merge, deployment or `master` change was made.
+Scope: `git status`, full diff read, secret sweep, migration and test review, lockfile verification, then the branch push and PR #3. This work made no `master` change, no deployment and no real-data or real-mail use; merging remains the owner's decision.
 
 - 11 modified files: `.env.example`, `client/src/App.tsx`, `client/src/index.css`, `package.json`, `pnpm-lock.yaml`, `server/app.ts`, `server/config.ts`, `server/http/errors.ts`, `server/index.ts`, `shared/routes.ts`, `vitest.config.ts`
-- 24 added paths: `client/src/lib/api.ts`, `client/src/pages/{AuthPages,WorkspacePage}.tsx`, `server/auth/*`, `server/db/database.ts`, `server/email/*`, `server/http/{cookies,logger}.ts`, `server/modules/{auth,authorized,workspace}.ts`, `server/services.ts`, `supabase/migrations/000{2,3,4}_*.sql`, `tests/{auth-api,config,email,migrations,supabase-identity,tenant-isolation,workspace}.test.ts`, `tests/browser-auth.mjs`, `tests/support/*`
+- 25 added paths:
+  `tests/support/browser.ts`, `client/src/lib/api.ts`, `client/src/pages/{AuthPages,WorkspacePage}.tsx`, `server/auth/*`, `server/db/database.ts`, `server/email/*`, `server/http/{cookies,logger}.ts`, `server/modules/{auth,authorized,workspace}.ts`, `server/services.ts`, `supabase/migrations/000{2,3,4}_*.sql`, `tests/{auth-api,config,email,migrations,supabase-identity,tenant-isolation,workspace}.test.ts`, `tests/browser-auth.mjs`, `tests/support/*`
 - no unrelated feature, dependency or workflow change; `package.json` additions are limited to `pg`, `nodemailer` and their types plus test-only `pglite-socket`, `smtp-server`, `playwright-core`/`@sparticuz/chromium` usage already implied by the Phase 0 browser gate
 - secret sweep across the full diff and every added file: no live credential, key, JWT, private key or password-bearing connection string; only documented placeholders and `*.example.test` fixtures. No SMTP or database secret is echoed by any code path
 - `.env.example` documents the new variables as inert comments; `.env.*` remains ignored except the example
 - `git diff --check` clean; generated `dist/` excluded; no debug script left behind
-- suggested commit message if the owner accepts this work: `Phase 2: identity, tenancy and email foundation with verification suite`
+- commits on the branch: `643de43` (Phase 2 implementation) and `f569bff` (browser launch portability, added after the first hosted run failed at that step). Hosted `verify` is green on `f569bff`.
 - **Awaiting human review.** Nothing here should be read as approval to deploy, to point the application at a real database, or to send real email.
