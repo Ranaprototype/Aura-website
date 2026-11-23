@@ -12,19 +12,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolve } from "node:path";
-import { chromium } from "playwright-core";
+import { launchChromium, chromiumExecutable } from "./support/browser.ts";
 import { startTestApp, APP_ORIGIN } from "./support/app.ts";
 import { findMessage, tokenFromMessage } from "./support/smtp.ts";
 
-const executablePath = async () => {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
-  const module = await import("@sparticuz/chromium");
-  return module.default.executablePath();
-};
-
-test("authentication, verification, recovery, protected routes and storefront", async t => {
-  const path = await executablePath();
-  assert.ok(path, "A Chromium executable is required; set CHROMIUM_PATH.");
+const run = async t => {
+  const path = await chromiumExecutable();
 
   const app = await startTestApp({ staticPath: resolve("dist/public") });
   t.after(async () => {
@@ -32,19 +25,7 @@ test("authentication, verification, recovery, protected routes and storefront", 
   });
   const origin = app.baseUrl;
 
-  const browser = await chromium.launch({
-    executablePath: path,
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-setuid-sandbox",
-      "--no-zygote",
-      "--single-process",
-      "--use-gl=angle",
-      "--use-angle=swiftshader",
-    ],
-  });
+  const browser = await launchChromium(path);
   t.after(async () => {
     await browser.close();
   });
@@ -187,4 +168,14 @@ test("authentication, verification, recovery, protected routes and storefront", 
 
   assert.deepEqual(pageErrors, []);
   assert.ok(APP_ORIGIN.length > 0);
+};
+
+test("authentication, verification, recovery, protected routes and storefront", async t => {
+  try {
+    await run(t);
+  } catch (error) {
+    // Surface the reason as a CI annotation; full logs are not always readable.
+    console.error(`::error::${String(error?.stack ?? error).split("\n").slice(0, 3).join(" ").slice(0, 400)}`);
+    throw error;
+  }
 });

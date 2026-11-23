@@ -31,7 +31,9 @@ Same commands as above; `corepack pnpm test` now also runs the Phase 2 suites an
 - `tests/supabase-identity.test.ts`: token verification against a test-owned loopback issuer (JSON/HTML/401/slow/oversized/short tokens) and the unconfigured `501` path.
 - `tests/config.test.ts`: offline and production configuration, fail-closed matrix, no secret echo, diagnostic token refused in production.
 - `tests/email.test.ts`: all seven templates, HTML and plain text, local delivery via a test-owned `smtp-server` sink, invalid recipient, failed delivery, retry/backoff, idempotency, duplicate prevention, rate limits, redacted logs, no credential literals in source.
-- `tests/browser-auth.mjs`: registration, verification, login, session restoration, protected route redirect, logout plus cookie replay, password recovery and reused-link refusal in real Chromium against the built SPA, with external requests blocked and page errors asserted empty.
+- Browser launch is shared through `tests/support/browser.ts`: it tries the portable flag set, then the flags a namespaced container needs, then Playwright's defaults, verifying that each candidate can render a page before use. `CHROMIUM_PATH` is optional — without it the bundled `@sparticuz/chromium` binary is used — and a launch failure is reported as a GitHub annotation instead of only in the log.
+
+`tests/browser-auth.mjs`: registration, verification, login, session restoration, protected route redirect, logout plus cookie replay, password recovery and reused-link refusal in real Chromium against the built SPA, with external requests blocked and page errors asserted empty.
 
 Limits of this evidence, stated once: PGlite is a single-process PostgreSQL build, so it proves SQL/RLS/policy behaviour and per-transaction identity, not multi-backend contention; deployed grants, PostgREST exposure, TLS mail delivery and deliverability still require the owner's isolated environment.
 
