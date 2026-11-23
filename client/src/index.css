@@ -8070,3 +8070,58 @@ button {
     transition: none;
   }
 }
+
+/* Phase 2 authentication surfaces. Deliberately plain so the storefront
+   identity stays intact and no commerce state is rendered here. */
+.auth-form {
+  display: grid;
+  gap: 14px;
+  max-width: 420px;
+}
+.auth-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.auth-field label {
+  color: var(--muted, #9aa0ae);
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.auth-input {
+  background: var(--surface-raised, #11111c);
+  border: 1px solid var(--line, #23233a);
+  border-radius: 4px;
+  color: var(--foreground, #f8f8fc);
+  padding: 10px 12px;
+  font-size: 15px;
+  width: 100%;
+}
+.auth-input:focus-visible {
+  outline: 2px solid var(--cyan, #6de7ff);
+  outline-offset: 1px;
+}
+.auth-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.auth-status--error {
+  background: rgba(255, 92, 92, 0.12);
+  border: 1px solid rgba(255, 92, 92, 0.4);
+  color: #ffb4b4;
+}
+.auth-status--info {
+  background: rgba(109, 231, 255, 0.08);
+  border: 1px solid rgba(109, 231, 255, 0.35);
+  color: #cfeeff;
+}
+.auth-form ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
