@@ -14,6 +14,15 @@ import CommerceOverlay from "./components/CommerceOverlay";
 import AccountPage from "./pages/AccountPage";
 import { ComparisonPage } from "./components/Phase6ProductExtras";
 import TestSupabase from "./pages/TestSupabase";
+import WorkspacePage from "./pages/WorkspacePage";
+import {
+  AcceptInvitationPage,
+  ForgotPasswordPage,
+  RegisterPage,
+  ResetPasswordPage,
+  SignInPage,
+  VerifyEmailPage,
+} from "./pages/AuthPages";
 
 function Router() {
   const currentPath = () => window.location.pathname.replace(/\/+$/, "") || "/";
@@ -26,6 +35,13 @@ function Router() {
   }, []);
 
   if (path === "/test-supabase") return <TestSupabase />;
+  if (path === "/sign-in") return <SignInPage />;
+  if (path === "/register") return <RegisterPage />;
+  if (path === "/forgot-password") return <ForgotPasswordPage />;
+  if (path === "/reset-password") return <ResetPasswordPage />;
+  if (path === "/verify-email") return <VerifyEmailPage />;
+  if (path === "/accept-invitation") return <AcceptInvitationPage />;
+  if (path === "/workspace") return <WorkspacePage />;
   if (path === "/compare") {
     const slugs =
       new URLSearchParams(window.location.search).get("products")?.split(",") ||
