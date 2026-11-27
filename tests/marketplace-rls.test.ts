@@ -362,7 +362,9 @@ describe("tenant isolation", () => {
       "products_seller_fk",
     ]);
     for (const row of constraints)
-      expect(row.def, row.conname).toMatch(/\(org_id, (id|product_id|seller_profile_id|approved_revision_id)\)/);
+      expect(row.def, row.conname).toMatch(
+        /\(org_id, (id|product_id|seller_profile_id|approved_revision_id)\)/
+      );
   });
 
   it("cannot read or update another tenant's product through the API role", async () => {
@@ -382,7 +384,9 @@ describe("tenant isolation", () => {
   it("cannot create a variant in a different organization from its product", async () => {
     await expect(
       as(OWNER_A, tx => addVariant(tx, ORG_B, productA, "MISMATCH-1"))
-    ).rejects.toThrow(/foreign key|violates|row-level security|denied|forbidden/i);
+    ).rejects.toThrow(
+      /foreign key|violates|row-level security|denied|forbidden/i
+    );
   });
 
   it("returns no seller or product rows when no identity is bound", async () => {
@@ -713,7 +717,9 @@ describe("product lifecycle", () => {
       await setStatus(tx, product.id, "submitted");
     });
     await expect(
-      as(OWNER_A, tx => addVariant(tx, ORG_A, product.id, `LOCKED-${Date.now()}`))
+      as(OWNER_A, tx =>
+        addVariant(tx, ORG_A, product.id, `LOCKED-${Date.now()}`)
+      )
     ).rejects.toThrow(/product_locked/);
     await expect(
       as(OWNER_A, tx =>
@@ -1053,5 +1059,136 @@ describe("validation and append-only guarantees", () => {
       audit_update: false,
       revision_delete: false,
     });
+  });
+});
+
+describe("platform review separation of duties", () => {
+  const DUAL = "99999999-9999-4999-8999-999999999999";
+
+  beforeAll(async () => {
+    await admin.query(
+      `insert into aura.principals (id, issuer, subject, email, display_name)
+       values ($1, 'local', 'dual-role', 'dual-role@example.test', 'Dual Role')`,
+      [DUAL]
+    );
+    await admin.query(
+      `insert into aura.platform_admins (principal_id, note) values ($1, 'four-eyes fixture')`,
+      [DUAL]
+    );
+    await admin.query(
+      `insert into aura.memberships (org_id, principal_id, role) values ($1, $2, 'member')`,
+      [ORG_A, DUAL]
+    );
+    // Put the organization's approved seller back under review so there is a
+    // real decision for the dual-role administrator to attempt.
+    await as(OWNER_A, tx =>
+      tx.query(
+        `update aura.seller_profiles set status = 'submitted' where org_id = $1`,
+        [ORG_A]
+      )
+    );
+  });
+
+  afterAll(async () => {
+    await as(OPERATOR, tx =>
+      tx.query(
+        `update aura.seller_profiles set status = 'approved'
+          where org_id = $1 and status = 'submitted'`,
+        [ORG_A]
+      )
+    );
+    await admin.query(`delete from aura.memberships where principal_id = $1`, [
+      DUAL,
+    ]);
+    await admin.query(
+      `delete from aura.platform_admins where principal_id = $1`,
+      [DUAL]
+    );
+  });
+
+  it("refuses decisions from a dual-role administrator under direct SQL", async () => {
+    // Seller application: approve and reject are both refused.
+    await expect(
+      as(DUAL, tx =>
+        tx.query(
+          `update aura.seller_profiles set status = 'approved' where org_id = $1`,
+          [ORG_A]
+        )
+      )
+    ).rejects.toThrow(/review_separation_required/);
+    await expect(
+      as(DUAL, tx =>
+        tx.query(
+          `update aura.seller_profiles
+              set status = 'rejected', review_note = 'self review'
+            where org_id = $1`,
+          [ORG_A]
+        )
+      )
+    ).rejects.toThrow(/review_separation_required/);
+
+    // The same application is still decided by an unrelated administrator.
+    const approved = await as(OPERATOR, tx =>
+      tx.query<{ status: string }>(
+        `update aura.seller_profiles set status = 'approved'
+          where org_id = $1 returning status`,
+        [ORG_A]
+      )
+    );
+    expect(approved[0]?.status).toBe("approved");
+
+    const product = await preparableProduct("Four Eyes Runner");
+    const revisionId = await as(OWNER_A, async tx => {
+      const rows = await submit(tx, ORG_A, product.id);
+      await setStatus(tx, product.id, "submitted");
+      return rows[0]!.id;
+    });
+
+    await expect(
+      as(DUAL, tx =>
+        tx.query(
+          `update aura.product_revisions set decision = 'approved' where id = $1`,
+          [revisionId]
+        )
+      )
+    ).rejects.toThrow(/review_separation_required/);
+    await expect(
+      as(DUAL, tx =>
+        tx.query(
+          `update aura.product_revisions
+              set decision = 'rejected', review_note = 'self review'
+            where id = $1`,
+          [revisionId]
+        )
+      )
+    ).rejects.toThrow(/review_separation_required/);
+
+    // The revision can be approved by the unrelated administrator, but the
+    // dual-role administrator still cannot move the product itself.
+    await as(OPERATOR, tx =>
+      tx.query(
+        `update aura.product_revisions set decision = 'approved' where id = $1`,
+        [revisionId]
+      )
+    );
+    await expect(
+      as(DUAL, tx =>
+        tx.query(
+          `update aura.products
+              set status = 'approved', approved_revision_id = $2
+            where id = $1`,
+          [product.id, revisionId]
+        )
+      )
+    ).rejects.toThrow(/review_separation_required/);
+
+    // The platform grant still authorizes ordinary review reads.
+    const visible = await as(DUAL, tx =>
+      tx.query<{ n: number }>(
+        `select count(*)::int as n from aura.seller_profiles where org_id = $1`,
+        [ORG_A]
+      )
+    );
+    expect(visible[0]?.n).toBe(1);
   });
 });

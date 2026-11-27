@@ -38,6 +38,24 @@ const uuidParam = (value: string | undefined) => {
 const iso = (value: Date | null | undefined) =>
   value ? new Date(value).toISOString() : null;
 
+/**
+ * Four-eyes separation of duties. A platform administrator who is also an
+ * active member of the seller organization cannot decide that organization's
+ * seller application or catalogue. `0007_review_separation.sql` enforces the
+ * same rule in the database, so direct SQL cannot bypass it.
+ */
+const requireSeparatedReviewer = async (
+  tx: Parameters<typeof loadProductRow>[0],
+  orgId: string
+) => {
+  const rows = await tx.query<{ member: boolean }>(
+    `select aura.is_active_member($1) as member`,
+    [orgId]
+  );
+  if (rows[0]?.member)
+    throw new RequestError(403, "review_separation_required");
+};
+
 const adminSummary = (row: ProductRow) => ({
   ...summarizeProduct(row),
   orgName: row.org_name,
@@ -115,6 +133,7 @@ export function reviewRoutes(services: AppServices) {
     requirePlatformAdmin(services, async ({ tx, req }) => {
       const orgId = uuidParam(req.params.orgId);
       await loadSellerOr404(tx, orgId);
+      await requireSeparatedReviewer(tx, orgId);
       try {
         const rows = await tx.query<SellerRow>(
           `update aura.seller_profiles set status = 'approved'
@@ -142,6 +161,7 @@ export function reviewRoutes(services: AppServices) {
       const parsed = reviewNoteBody.safeParse(req.body);
       if (!parsed.success) throw new RequestError(400, "invalid_request");
       await loadSellerOr404(tx, orgId);
+      await requireSeparatedReviewer(tx, orgId);
       try {
         const rows = await tx.query<SellerRow>(
           `update aura.seller_profiles
@@ -269,13 +289,18 @@ export function reviewRoutes(services: AppServices) {
     decision: "approved" | "rejected",
     note: string | null
   ) => {
-    const locked = await tx.query<{ id: string; status: string }>(
-      `select id, status from aura.products where id = $1 for update`,
+    const locked = await tx.query<{
+      id: string;
+      org_id: string;
+      status: string;
+    }>(
+      `select id, org_id, status from aura.products where id = $1 for update`,
       [productId]
     );
     if (!locked[0]) throw new RequestError(404, "product_not_found");
     if (locked[0].status !== "submitted")
       throw new RequestError(409, "invalid_status_transition");
+    await requireSeparatedReviewer(tx, locked[0].org_id);
     const pending = await tx.query<{ id: string }>(
       `select id from aura.product_revisions
         where product_id = $1 and decision = 'pending'

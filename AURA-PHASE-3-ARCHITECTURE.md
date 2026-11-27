@@ -41,17 +41,17 @@ bundle, and the browser never infers permission from a status.
 
 ## Data model
 
-| Table | Purpose | Tenant key |
-|---|---|---|
-| `aura.seller_profiles` | one application per organization; business identity and review state | `org_id` (PK) |
-| `aura.categories` | global reference data (seeded: sneakers, apparel, accessories) | — |
-| `aura.category_attributes` | typed attribute definitions per category | — |
-| `aura.products` | seller-owned listing with lifecycle state | `org_id` |
-| `aura.product_revisions` | immutable submitted snapshots, numbered per product | `org_id` |
-| `aura.product_variants` | size/colour/material combinations, seller-defined SKU | `org_id` |
-| `aura.product_media` | ordered external https image references and alt text | `org_id` |
-| `aura.product_attribute_values` | one validated value per declared category attribute | `org_id` |
-| `aura.audit_events` | append-only seller and product history | `org_id` |
+| Table                           | Purpose                                                              | Tenant key    |
+| ------------------------------- | -------------------------------------------------------------------- | ------------- |
+| `aura.seller_profiles`          | one application per organization; business identity and review state | `org_id` (PK) |
+| `aura.categories`               | global reference data (seeded: sneakers, apparel, accessories)       | —             |
+| `aura.category_attributes`      | typed attribute definitions per category                             | —             |
+| `aura.products`                 | seller-owned listing with lifecycle state                            | `org_id`      |
+| `aura.product_revisions`        | immutable submitted snapshots, numbered per product                  | `org_id`      |
+| `aura.product_variants`         | size/colour/material combinations, seller-defined SKU                | `org_id`      |
+| `aura.product_media`            | ordered external https image references and alt text                 | `org_id`      |
+| `aura.product_attribute_values` | one validated value per declared category attribute                  | `org_id`      |
+| `aura.audit_events`             | append-only seller and product history                               | `org_id`      |
 
 Design choices worth stating:
 
@@ -91,18 +91,18 @@ approved --(seller edits content)--> approved with pending revision, purchasable
 approved|rejected --archive--> archived (read-only; pending_changes = false)
 ```
 
-| Transition | Actor | Preconditions enforced in SQL |
-|---|---|---|
-| profile draft → submitted | catalog writer, verified email | `status='draft'`, complete business fields |
-| profile submitted → approved | platform admin | `status='submitted'`, `reviewed_by` recorded |
-| profile submitted → rejected | platform admin | `status='submitted'`, rejection note non-empty |
-| product create → draft | catalog writer | approved seller profile in same org |
-| draft/rejected → submitted | catalog writer | product status in (`draft`,`rejected`,`approved`), ≥1 variant, ≥1 image, all required attributes |
-| submitted → approved | platform admin | pending revision exists; product row gets `approved_revision_id`, `approved_at` and `pending_changes=false`, which is what makes it purchasable |
-| submitted → rejected | platform admin | pending revision exists; note stored on the revision |
-| any editable → archived | catalog manager (owner/admin) | not already archived; clears pending state. Archiving is irreversible, so it is reserved to the roles that can also submit the seller profile |
-| editing approved content (row, variant, media or attribute) | catalog writer | `pending_changes=true`, which withdraws purchasability |
-| child content change while submitted/archived | nobody | `product_locked` |
+| Transition                                                  | Actor                          | Preconditions enforced in SQL                                                                                                                   |
+| ----------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| profile draft → submitted                                   | catalog writer, verified email | `status='draft'`, complete business fields                                                                                                      |
+| profile submitted → approved                                | platform admin                 | `status='submitted'`, `reviewed_by` recorded                                                                                                    |
+| profile submitted → rejected                                | platform admin                 | `status='submitted'`, rejection note non-empty                                                                                                  |
+| product create → draft                                      | catalog writer                 | approved seller profile in same org                                                                                                             |
+| draft/rejected → submitted                                  | catalog writer                 | product status in (`draft`,`rejected`,`approved`), ≥1 variant, ≥1 image, all required attributes                                                |
+| submitted → approved                                        | platform admin                 | pending revision exists; product row gets `approved_revision_id`, `approved_at` and `pending_changes=false`, which is what makes it purchasable |
+| submitted → rejected                                        | platform admin                 | pending revision exists; note stored on the revision                                                                                            |
+| any editable → archived                                     | catalog manager (owner/admin)  | not already archived; clears pending state. Archiving is irreversible, so it is reserved to the roles that can also submit the seller profile   |
+| editing approved content (row, variant, media or attribute) | catalog writer                 | `pending_changes=true`, which withdraws purchasability                                                                                          |
+| child content change while submitted/archived               | nobody                         | `product_locked`                                                                                                                                |
 
 `submitted_at`, `archived_at` and `approved_at`/`approved_revision_id` cannot be
 written by a non-platform-admin update path; the guard raises `forbidden`
@@ -138,20 +138,29 @@ Existing organization roles are reused. Two new shared sets:
   standard editing role; there is no `editor` role in this product.)
 - `CATALOG_MANAGE_ROLES = ('owner','admin')` — save and submit the seller profile.
 
-| Capability | viewer | member | admin | owner | platform admin |
-|---|---|---|---|---|---|
-| Read seller dashboard/products | yes | yes | yes | yes | yes (review routes) |
-| Create/edit products, variants, media, attributes, submit | no | yes | yes | yes | no (org write paths refuse) |
-| Archive a product (irreversible) | no | no | yes | yes | no |
-| Save/submit seller profile | no | no | yes | yes | no |
-| Read audit history of own org | yes | yes | yes | yes | yes (via review) |
-| Approve/reject sellers and products | no | no | no | no | yes |
+| Capability                                                | viewer | member | admin | owner | platform admin                     |
+| --------------------------------------------------------- | ------ | ------ | ----- | ----- | ---------------------------------- |
+| Read seller dashboard/products                            | yes    | yes    | yes   | yes   | yes (review routes)                |
+| Create/edit products, variants, media, attributes, submit | no     | yes    | yes   | yes   | no (org write paths refuse)        |
+| Archive a product (irreversible)                          | no     | no     | yes   | yes   | no                                 |
+| Save/submit seller profile                                | no     | no     | yes   | yes   | no                                 |
+| Read audit history of own org                             | yes    | yes    | yes   | yes   | yes (via review)                   |
+| Approve/reject sellers and products                       | no     | no     | no    | no    | yes, except their own organization |
 
 Platform administration is a **separate** global grant (`aura.platform_admins`),
 never a role inside an organization, and it cannot be created through the API.
 Non-platform access to `/admin/*` returns `403 role_forbidden`, including a
 seller attempting to review their own submission. Every approval or rejection
 decision is written to the audit trail with the reviewer's identity.
+
+**Four eyes.** A platform administrator who also holds an active membership of
+the seller organization cannot decide that organization's seller application,
+product state or revision. The rule lives in the database
+(`aura.review_separation_guard`, migration `0007`) and is mirrored by a
+pre-check in the review routes, so a direct SQL update is refused with
+`review_separation_required` just like the API's `403`. Decisions on
+organizations the administrator does not belong to are unchanged, and the
+review queues remain readable.
 
 ## Tenant isolation
 
@@ -179,26 +188,26 @@ All routes are mounted below `/api/v1`, require a session and a verified email,
 require the CSRF header on mutations, and use strict JSON (32 kB cap, unknown
 fields rejected).
 
-| Method and path | Purpose |
-|---|---|
-| `GET /seller/dashboard` | profile, counts by status, recent activity |
-| `GET /seller/profile` | profile plus audit history |
-| `PUT /seller/profile` | create or save the application (manage roles) |
-| `POST /seller/profile/submit` | submit for platform review |
-| `GET /categories` | categories with typed attribute definitions |
-| `GET /seller/products` | own catalogue, filterable by status |
-| `POST /seller/products` | create a draft |
-| `GET /seller/products/:id` | detail, working copy, latest revision, variants, media, attributes, audit |
-| `PATCH /seller/products/:id` | edit working copy (blocked while submitted or archived) |
-| `POST /seller/products/:id/submit` | freeze a revision and request review |
-| `POST /seller/products/:id/archive` | archive and make non-purchasable |
-| `POST/PATCH/DELETE /seller/products/:id/variants[/:variantId]` | variant CRUD |
-| `POST/PATCH/DELETE /seller/products/:id/media[/:mediaId]` | media reference CRUD |
-| `PUT /seller/products/:id/attributes` | replace validated attribute values |
-| `GET /admin/sellers`, `GET /admin/sellers/:orgId` | seller queues and detail |
-| `POST /admin/sellers/:orgId/approve`, `.../reject` | seller decisions |
-| `GET /admin/products`, `GET /admin/products/:id` | product queues and snapshots |
-| `POST /admin/products/:id/approve`, `.../reject` | product decisions |
+| Method and path                                                | Purpose                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `GET /seller/dashboard`                                        | profile, counts by status, recent activity                                |
+| `GET /seller/profile`                                          | profile plus audit history                                                |
+| `PUT /seller/profile`                                          | create or save the application (manage roles)                             |
+| `POST /seller/profile/submit`                                  | submit for platform review                                                |
+| `GET /categories`                                              | categories with typed attribute definitions                               |
+| `GET /seller/products`                                         | own catalogue, filterable by status                                       |
+| `POST /seller/products`                                        | create a draft                                                            |
+| `GET /seller/products/:id`                                     | detail, working copy, latest revision, variants, media, attributes, audit |
+| `PATCH /seller/products/:id`                                   | edit working copy (blocked while submitted or archived)                   |
+| `POST /seller/products/:id/submit`                             | freeze a revision and request review                                      |
+| `POST /seller/products/:id/archive`                            | archive and make non-purchasable                                          |
+| `POST/PATCH/DELETE /seller/products/:id/variants[/:variantId]` | variant CRUD                                                              |
+| `POST/PATCH/DELETE /seller/products/:id/media[/:mediaId]`      | media reference CRUD                                                      |
+| `PUT /seller/products/:id/attributes`                          | replace validated attribute values                                        |
+| `GET /admin/sellers`, `GET /admin/sellers/:orgId`              | seller queues and detail                                                  |
+| `POST /admin/sellers/:orgId/approve`, `.../reject`             | seller decisions                                                          |
+| `GET /admin/products`, `GET /admin/products/:id`               | product queues and snapshots                                              |
+| `POST /admin/products/:id/approve`, `.../reject`               | product decisions                                                         |
 
 Error codes are stable and machine-readable: `seller_profile_required`,
 `seller_not_approved`, `seller_already_submitted`, `product_incomplete`,

@@ -951,3 +951,127 @@ describe("tenant isolation and request hardening", () => {
     );
   });
 });
+
+describe("four-eyes separation of duties", () => {
+  let dual: Awaited<ReturnType<typeof registerUser>>;
+
+  beforeAll(async () => {
+    dual = await verifiedUser("phase3.dual@example.test", "Dual Operator");
+    await app.db.admin.query(
+      `insert into aura.platform_admins (principal_id, note) values ($1, 'four-eyes fixture')`,
+      [dual.principalId]
+    );
+    await app.db.admin.query(
+      `insert into aura.memberships (org_id, principal_id, role) values ($1, $2, 'member')`,
+      [ownerA.organizationId, dual.principalId]
+    );
+  });
+
+  it("blocks a dual-role administrator from deciding its own seller application", async () => {
+    // The administrator owns this seller organization, so the application is
+    // their own as well as their organization's.
+    const saved = await dual.client.put<SellerBody>(
+      "/api/v1/seller/profile",
+      sellerInput("Dual Atelier"),
+      orgHeader(dual.organizationId)
+    );
+    expect(saved.status).toBe(201);
+    const submitted = await dual.client.post(
+      "/api/v1/seller/profile/submit",
+      {},
+      orgHeader(dual.organizationId)
+    );
+    expect(submitted.status).toBe(200);
+
+    const approve = await dual.client.post(
+      `/api/v1/admin/sellers/${dual.organizationId}/approve`,
+      {}
+    );
+    expect(approve.status).toBe(403);
+    expect(approve.body).toEqual({ error: "review_separation_required" });
+
+    const reject = await dual.client.post(
+      `/api/v1/admin/sellers/${dual.organizationId}/reject`,
+      { note: "Reviewing my own application." }
+    );
+    expect(reject.status).toBe(403);
+    expect(reject.body).toEqual({ error: "review_separation_required" });
+
+    // The platform grant still authorizes reading the queue.
+    const queue = await dual.client.get(
+      "/api/v1/admin/sellers?status=submitted"
+    );
+    expect(queue.status).toBe(200);
+
+    // An unrelated platform administrator is unaffected.
+    const approved = await operator.client.post<SellerBody>(
+      `/api/v1/admin/sellers/${dual.organizationId}/approve`,
+      {}
+    );
+    expect(approved.status).toBe(200);
+    expect(approved.body.seller?.status).toBe("approved");
+  });
+
+  it("blocks a dual-role administrator from deciding its own catalogue revision", async () => {
+    const category = await sneakers(ownerA);
+    const created = await ownerA.client.post<ProductBody>(
+      "/api/v1/seller/products",
+      {
+        title: "Four Eyes Runner",
+        summary: "Separation of duties fixture.",
+        description: "Created by the four-eyes verification suite.",
+        categoryId: category.id,
+      },
+      orgHeader(ownerA.organizationId)
+    );
+    expect(created.status).toBe(201);
+    const productId = created.body.product.id;
+
+    const variant = await ownerA.client.post(
+      `/api/v1/seller/products/${productId}/variants`,
+      {
+        sku: "FOUR-EYES-42",
+        title: "Size 42 / Cyan",
+        size: "42",
+        colour: "cyan",
+      },
+      orgHeader(ownerA.organizationId)
+    );
+    expect(variant.status).toBe(201);
+
+    const attributes = await ownerA.client.put(
+      `/api/v1/seller/products/${productId}/attributes`,
+      { values: [{ attributeId: category.required.id, value: "knit" }] },
+      orgHeader(ownerA.organizationId)
+    );
+    expect(attributes.status).toBe(200);
+
+    const submitted = await ownerA.client.post(
+      `/api/v1/seller/products/${productId}/submit`,
+      {},
+      orgHeader(ownerA.organizationId)
+    );
+    expect(submitted.status).toBe(201);
+
+    const approve = await dual.client.post(
+      `/api/v1/admin/products/${productId}/approve`,
+      {}
+    );
+    expect(approve.status).toBe(403);
+    expect(approve.body).toEqual({ error: "review_separation_required" });
+
+    const reject = await dual.client.post(
+      `/api/v1/admin/products/${productId}/reject`,
+      { note: "Reviewing my own revision." }
+    );
+    expect(reject.status).toBe(403);
+    expect(reject.body).toEqual({ error: "review_separation_required" });
+
+    const approved = await operator.client.post<ProductBody>(
+      `/api/v1/admin/products/${productId}/approve`,
+      { note: "Reviewed by an unrelated administrator." }
+    );
+    expect(approved.status).toBe(200);
+    expect(approved.body.product.purchasable).toBe(true);
+  });
+});

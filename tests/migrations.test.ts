@@ -45,6 +45,7 @@ describe("migration set", () => {
       "0004_roles.sql",
       "0005_seller_catalog.sql",
       "0006_catalog_privileges.sql",
+      "0007_review_separation.sql",
     ]);
   });
 
@@ -170,6 +171,28 @@ describe("migration set", () => {
       "product_revisions_member_select",
       "product_revisions_writer_insert",
     ]);
+  });
+
+  it("installs the four-eyes review separation triggers", async () => {
+    const triggers = await engine.query<{ tgname: string }>(
+      `select t.tgname from pg_trigger t
+         join pg_class c on c.oid = t.tgrelid
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'aura' and not t.tgisinternal
+          and t.tgname like '%review_separation'
+        order by t.tgname`
+    );
+    expect(triggers.rows.map(row => row.tgname)).toEqual([
+      "product_revisions_review_separation",
+      "products_review_separation",
+      "seller_profiles_review_separation",
+    ]);
+    const fn = await engine.query<{ n: number }>(
+      `select count(*)::int as n from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'aura' and p.proname = 'review_separation_guard'`
+    );
+    expect(fn.rows[0]?.n).toBe(1);
   });
 
   it("creates a non-owner runtime role without bypass attributes", async () => {

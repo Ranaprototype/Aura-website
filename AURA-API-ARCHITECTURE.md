@@ -6,16 +6,16 @@
 
 Ingress sets trusted request ID and enforces TLS/size/time limits → verify session and origin/CSRF for browser mutations → parse strict versioned DTO → resolve acting org and resource from authoritative records → authorize capability and state → domain command → repository within transaction → commit → response. Listing queries must scope the query itself, not filter unauthorized rows after pagination. Never infer authorization from route prefix. Keep DTOs separate from SQL row shapes and provider payloads. Each module owns its command/query interface, errors, policy and repository; orchestration can pass a common transaction across module interfaces without importing their tables.
 
-| Proposed `/api/v1` routes (examples) | Caller and enforcement |
-|---|---|
-| `/session`, `/me/profile`, `/me/addresses`, `/organizations/:id/members` | Verified identity, self-only private profile; scoped org admins for memberships; no self-escalation. IdP redirects/callbacks verified separately. |
-| `/catalog/products`, `/listings`, `/seller/listings`, `/seller/inventory/reservations` | Public approved projections only; seller mutations require specific active seller membership and variant/location ownership. Reservation commands may be internal only. |
-| `/me/cart`, `/checkout/intents`, `/orders/:id`, `/payments/checkout-sessions`, `/refund-requests` | Customer reaccepts server quote; buyer or tightly scoped vendor suborder read. Sensitive actions require authorization, idempotency, verified state and recorded consent. No raw payment input endpoint. |
-| `/designs/:id/revisions`, `/design-jobs`, `/customizations`, `/assets/upload-intents` | Owner/delegate with explicit edit/read scope; quotas, scan and provenance checks. Validate parameters against pinned schema; never accept object key as authority. |
-| `/publications`, `/publications/:id/comments`, `/likes`, `/me/saves`, `/lab/proposals`, `/demand/clusters` | Publication consent, moderation and visibility; private saves self-only. Restricted aggregates for analysts, never raw cross-tenant signals. |
-| `/manufacturer/reviews`, `/manufacturer/quotes`, `/campaigns/:id`, `/campaigns/:id/commitments` | Verified manufacturer and project invitation for review/quote. Organizer pins approved terms. Customers submit/cancel only their own commitments subject to current rules. |
-| `/production/batches`, `/quality/reviews`, `/shipments` | Assigned manufacturer updates progress; independent authorized QA release; vendor/carrier-specific fulfillment scope. No manufacturing action from social or model output. |
-| `/agent/action-requests`, `/admin/cases`, `/approvals/:id/decisions`, `/jobs/:id` | Delegated proposal vs human decision; audit and separation of duties. Job status/results authorized per owner, not simply possession of job UUID. |
+| Proposed `/api/v1` routes (examples)                                                                       | Caller and enforcement                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/session`, `/me/profile`, `/me/addresses`, `/organizations/:id/members`                                   | Verified identity, self-only private profile; scoped org admins for memberships; no self-escalation. IdP redirects/callbacks verified separately.                                                        |
+| `/catalog/products`, `/listings`, `/seller/listings`, `/seller/inventory/reservations`                     | Public approved projections only; seller mutations require specific active seller membership and variant/location ownership. Reservation commands may be internal only.                                  |
+| `/me/cart`, `/checkout/intents`, `/orders/:id`, `/payments/checkout-sessions`, `/refund-requests`          | Customer reaccepts server quote; buyer or tightly scoped vendor suborder read. Sensitive actions require authorization, idempotency, verified state and recorded consent. No raw payment input endpoint. |
+| `/designs/:id/revisions`, `/design-jobs`, `/customizations`, `/assets/upload-intents`                      | Owner/delegate with explicit edit/read scope; quotas, scan and provenance checks. Validate parameters against pinned schema; never accept object key as authority.                                       |
+| `/publications`, `/publications/:id/comments`, `/likes`, `/me/saves`, `/lab/proposals`, `/demand/clusters` | Publication consent, moderation and visibility; private saves self-only. Restricted aggregates for analysts, never raw cross-tenant signals.                                                             |
+| `/manufacturer/reviews`, `/manufacturer/quotes`, `/campaigns/:id`, `/campaigns/:id/commitments`            | Verified manufacturer and project invitation for review/quote. Organizer pins approved terms. Customers submit/cancel only their own commitments subject to current rules.                               |
+| `/production/batches`, `/quality/reviews`, `/shipments`                                                    | Assigned manufacturer updates progress; independent authorized QA release; vendor/carrier-specific fulfillment scope. No manufacturing action from social or model output.                               |
+| `/agent/action-requests`, `/admin/cases`, `/approvals/:id/decisions`, `/jobs/:id`                          | Delegated proposal vs human decision; audit and separation of duties. Job status/results authorized per owner, not simply possession of job UUID.                                                        |
 
 Provider callbacks use a **separate** ingress such as `/integrations/payments/:provider/webhook`, not a browser session. Map allowlisted provider/account to an adapter; verify raw request signature/timestamp **before** parsing or writing. Validate event shape and binding to merchant, environment, order, currency and amount. Commit deduplicated inbox receipt before acknowledgment; reconcile independent trusted provider query for uncertain or conflicting outcomes. No arbitrary callback URLs supplied by agents/users.
 
@@ -28,13 +28,13 @@ Provider callbacks use a **separate** ingress such as `/integrations/payments/:p
 
 ## Transaction versus asynchronous work
 
-| Synchronous atomic boundary | After commit / failure handling |
-|---|---|
-| Reprice accepted cart, reserve stock, create pending order, outbox | Create hosted session with stable key; if provider unavailable report pending/unavailable, expire hold by policy. Verified payment changes order state in a new transaction. |
-| Record refund approval and reserve refundable balance | Worker calls provider once per business key. Only verified result finalizes; uncertain refunds go to reconciliation. |
-| Record exact terms, eligibility and commitment under campaign lock | Notifications, deadline close and production scheduling read committed records. Recheck threshold/funding and approvals, deduplicate close/allocations. |
-| Persist authorized revision/job, quota reservation, outbox | Scan/transform assets, generate image/variation, cluster demand, prepare recommendations. Save validated output as a draft or rejected artifact, settle usage even on failure. |
-| Record QA release or authorized shipment intent | Request carrier label and ingest deduplicated tracking; out-of-order messages cannot reverse delivery without reviewed correction. |
+| Synchronous atomic boundary                                        | After commit / failure handling                                                                                                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Reprice accepted cart, reserve stock, create pending order, outbox | Create hosted session with stable key; if provider unavailable report pending/unavailable, expire hold by policy. Verified payment changes order state in a new transaction.   |
+| Record refund approval and reserve refundable balance              | Worker calls provider once per business key. Only verified result finalizes; uncertain refunds go to reconciliation.                                                           |
+| Record exact terms, eligibility and commitment under campaign lock | Notifications, deadline close and production scheduling read committed records. Recheck threshold/funding and approvals, deduplicate close/allocations.                        |
+| Persist authorized revision/job, quota reservation, outbox         | Scan/transform assets, generate image/variation, cluster demand, prepare recommendations. Save validated output as a draft or rejected artifact, settle usage even on failure. |
+| Record QA release or authorized shipment intent                    | Request carrier label and ingest deduplicated tracking; out-of-order messages cannot reverse delivery without reviewed correction.                                             |
 
 Workers claim limited batches under leased locks, release DB connection before external calls, renew lease for long jobs and commit result with expected version. Assume at-least-once delivery. Use backoff+jitter, bounded attempts, terminal failure/dead-letter review, deduplicated consumers and audited human replay. Version event payloads (`DesignRevisionPublished.v1`, `CampaignClosed.v1`); include identifiers, actor scope, event ID and trace ID, not PII. Revoked permissions or expired approvals at execution cancel the action. Real-time UI may poll status; unnecessary streaming infrastructure is deferred.
 
@@ -51,17 +51,17 @@ origin. Organization scope comes only from `x-aura-org` validated against a live
 membership row inside the request transaction — no body field, path parameter or
 token claim can change the tenant.
 
-| Route | Authorization | Notes |
-|---|---|---|
-| `GET /seller/dashboard`, `GET /seller/profile` | any active member (viewer+) | Profile plus append-only audit history |
-| `PUT /seller/profile`, `POST /seller/profile/submit` | `CATALOG_MANAGE_ROLES` (owner/admin) | Strict body allowlist; `seller_already_submitted` is a conflict |
-| `GET /categories` | any active member | Global reference data with typed attribute definitions |
-| `GET/POST /seller/products`, `GET/PATCH /seller/products/:id` | `CATALOG_WRITE_ROLES` | List filter is allowlisted; products are never hard-deleted |
-| `POST /seller/products/:id/submit` | `CATALOG_WRITE_ROLES` | Freezes a numbered revision and requests review |
-| `POST /seller/products/:id/archive` | `CATALOG_MANAGE_ROLES` | Irreversible; makes the product non-purchasable and clears pending state |
-| variants, media, attributes sub-routes | `CATALOG_WRITE_ROLES` | Media accepts external `https` references only; attributes are replaced wholesale |
-| `GET /admin/sellers[/:orgId]`, `POST .../approve`, `POST .../reject` | platform administrator only | Rejection requires a non-empty note |
-| `GET /admin/products[/:id]`, `POST .../approve`, `POST .../reject` | platform administrator only | Detail returns the submitted snapshot, revision and audit history |
+| Route                                                                | Authorization                                                 | Notes                                                                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `GET /seller/dashboard`, `GET /seller/profile`                       | any active member (viewer+)                                   | Profile plus append-only audit history                                                                                  |
+| `PUT /seller/profile`, `POST /seller/profile/submit`                 | `CATALOG_MANAGE_ROLES` (owner/admin)                          | Strict body allowlist; `seller_already_submitted` is a conflict                                                         |
+| `GET /categories`                                                    | any active member                                             | Global reference data with typed attribute definitions                                                                  |
+| `GET/POST /seller/products`, `GET/PATCH /seller/products/:id`        | `CATALOG_WRITE_ROLES`                                         | List filter is allowlisted; products are never hard-deleted                                                             |
+| `POST /seller/products/:id/submit`                                   | `CATALOG_WRITE_ROLES`                                         | Freezes a numbered revision and requests review                                                                         |
+| `POST /seller/products/:id/archive`                                  | `CATALOG_MANAGE_ROLES`                                        | Irreversible; makes the product non-purchasable and clears pending state                                                |
+| variants, media, attributes sub-routes                               | `CATALOG_WRITE_ROLES`                                         | Media accepts external `https` references only; attributes are replaced wholesale                                       |
+| `GET /admin/sellers[/:orgId]`, `POST .../approve`, `POST .../reject` | platform administrator only, excluding their own organization | Rejection requires a non-empty note; self-review returns `403 review_separation_required`                               |
+| `GET /admin/products[/:id]`, `POST .../approve`, `POST .../reject`   | platform administrator only, excluding their own organization | Detail returns the submitted snapshot, revision and audit history; self-review returns `403 review_separation_required` |
 
 Design rules applied, consistent with the contracts above:
 
@@ -72,8 +72,7 @@ Design rules applied, consistent with the contracts above:
 - **Strict contracts.** zod objects reject unknown fields, bound every string,
   and validate slugs, SKUs, hex colours, media URLs and category attribute
   values. Request bodies are capped at 32 kB for this router.
-- **Pagination.** List endpoints accept a bounded `limit` (default 100, maximum
-  200) and use a stable sort; there is no cursor yet. Confirm catalogue sizes
+- **Pagination.** List endpoints accept a bounded `limit` (default 100, maximum 200) and use a stable sort; there is no cursor yet. Confirm catalogue sizes
   before Phase 4.
 - **Origin and CSRF.** The origin/`Sec-Fetch-Site` allowlist and double-submit
   cookie are mounted for all of `/api/v1`; each route also verifies the

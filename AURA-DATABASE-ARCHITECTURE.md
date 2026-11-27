@@ -8,12 +8,12 @@ Readiness selects only `id` with GET and a one-row limit. An actual upstream 200
 
 ## Required before a shared database (not provisioned)
 
-| Role | Intended permissions |
-|---|---|
-| Migration | Own versioned DDL; controlled job, explicit schema and transaction boundaries. No web traffic. |
-| Application | Non-owner, no BYPASSRLS, only required DML/EXECUTE, subject and tenant constraints. No schema creation, grants or service key. |
-| Monitoring | Read-only approved probes/metrics, no payload access. Separate from application and admin. |
-| Administration | Restricted break-glass role; approval, expiry, access logging and review. Never loaded in web process. |
+| Role           | Intended permissions                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Migration      | Own versioned DDL; controlled job, explicit schema and transaction boundaries. No web traffic.                                 |
+| Application    | Non-owner, no BYPASSRLS, only required DML/EXECUTE, subject and tenant constraints. No schema creation, grants or service key. |
+| Monitoring     | Read-only approved probes/metrics, no payload access. Separate from application and admin.                                     |
+| Administration | Restricted break-glass role; approval, expiry, access logging and review. Never loaded in web process.                         |
 
 Obtain owner-approved **metadata-only** migration status, effective grants (including PUBLIC/default grants), exposed schemas, policies and owners before a forward migration. Deny public diagnostic writes on shared targets; verify a negative direct-database access test as well as API checks. Design readiness to use a narrowly granted probe rather than granting access to customer records. Do not edit deployed history. Review backward compatibility, backup, restore and rollback before applying changes. Retention and purge policy require data-owner review; no historical data cleanup is authorized.
 
@@ -25,17 +25,17 @@ Identity owns principals/memberships; customer, seller and manufacturer domains 
 
 Reference baseline `21f728190e07dc9a9442814d45523265f74e097d`. The preceding `hello` findings remain the only verified application schema. Names below describe logical records, **not** migrations, required physical schemas or evidence of deployed tables. The repository contains no SQL `GRANT` inventory for a target. The server key-format check is not evidence of effective database privileges.
 
-| Owner | Principal relationships and invariants |
-|---|---|
-| Identity / participants | Principal unique by issuer+subject; principal ↔ organization via membership with role, scope and revocation. Customer profile/addresses belong to a principal; seller/manufacturer profiles belong to an org. Verification decisions reference evidence and reviewer. |
-| Catalog / marketplace / stock | Category → product → variant. Listing belongs to seller and references variant + approved spec; immutable offer version holds amount, currency, validity. Inventory balance keyed by seller, variant, location; stock movements and expiring reservations reconcile to balance. |
-| Cart / orders | Customer cart → lines requesting offer/config revisions; quote snapshots have expiry. Order captures buyer, currency and agreed amounts; vendor suborder → lines reference immutable terms/spec, quantity and reservation. Seller sees only its own allocation and necessary fulfillment details. |
-| Payment / refund | Order → payment attempts → provider events; unique provider/account/event ID. Refund request → approval → provider refund; cumulative refunds cannot exceed verified captured amount. Store opaque provider references, not card data. |
-| Assets / studio | Asset metadata includes owner, object key/version, content hash, provenance, scan status and visibility. Design → immutable revisions with optional parent; generation/edit job links input/output revisions. Specification pins exact revision, units, option-schema/geometry versions and validation evidence. Private binary bytes belong in object storage; PG owns access and authoritative spec/parameter data. |
-| Community / Lab / demand | Public profile exposes selected fields. Publication references authorized revision; comments reference publication, likes/saves unique by principal+subject. Saves private. Proposal references suggestion/consented publication; cluster run/version → assignments, source signals and aggregate snapshots, not binding counts. |
-| Manufacturing / campaigns | Feasibility review references manufacturer+spec revision. Immutable quote version fixes quantity bands, amount/currency, capacity and expiry. Approved campaign pins quote, terms version, threshold, close time and cancel conditions. Commitment references customer, campaign, terms version, units and affirmative consent receipt; amendments/cancellations are events, not destructive updates. |
-| Production / fulfillment | Successful close references eligible commitments and resulting order allocations (unique per allocation to prevent duplicates). Production order → batches → QA evidence/release; shipment lines allocate released units to vendor order lines. Carrier events unique by provider/account/event identity. |
-| Platform operations | Job/outbox and delivery attempts; command idempotency keys; provider event inbox; approval/action, audit and budget/usage records. Cross-reference actor, target and correlation IDs, not full customer objects in events. |
+| Owner                         | Principal relationships and invariants                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity / participants       | Principal unique by issuer+subject; principal ↔ organization via membership with role, scope and revocation. Customer profile/addresses belong to a principal; seller/manufacturer profiles belong to an org. Verification decisions reference evidence and reviewer.                                                                                                                                                |
+| Catalog / marketplace / stock | Category → product → variant. Listing belongs to seller and references variant + approved spec; immutable offer version holds amount, currency, validity. Inventory balance keyed by seller, variant, location; stock movements and expiring reservations reconcile to balance.                                                                                                                                       |
+| Cart / orders                 | Customer cart → lines requesting offer/config revisions; quote snapshots have expiry. Order captures buyer, currency and agreed amounts; vendor suborder → lines reference immutable terms/spec, quantity and reservation. Seller sees only its own allocation and necessary fulfillment details.                                                                                                                     |
+| Payment / refund              | Order → payment attempts → provider events; unique provider/account/event ID. Refund request → approval → provider refund; cumulative refunds cannot exceed verified captured amount. Store opaque provider references, not card data.                                                                                                                                                                                |
+| Assets / studio               | Asset metadata includes owner, object key/version, content hash, provenance, scan status and visibility. Design → immutable revisions with optional parent; generation/edit job links input/output revisions. Specification pins exact revision, units, option-schema/geometry versions and validation evidence. Private binary bytes belong in object storage; PG owns access and authoritative spec/parameter data. |
+| Community / Lab / demand      | Public profile exposes selected fields. Publication references authorized revision; comments reference publication, likes/saves unique by principal+subject. Saves private. Proposal references suggestion/consented publication; cluster run/version → assignments, source signals and aggregate snapshots, not binding counts.                                                                                      |
+| Manufacturing / campaigns     | Feasibility review references manufacturer+spec revision. Immutable quote version fixes quantity bands, amount/currency, capacity and expiry. Approved campaign pins quote, terms version, threshold, close time and cancel conditions. Commitment references customer, campaign, terms version, units and affirmative consent receipt; amendments/cancellations are events, not destructive updates.                 |
+| Production / fulfillment      | Successful close references eligible commitments and resulting order allocations (unique per allocation to prevent duplicates). Production order → batches → QA evidence/release; shipment lines allocate released units to vendor order lines. Carrier events unique by provider/account/event identity.                                                                                                             |
+| Platform operations           | Job/outbox and delivery attempts; command idempotency keys; provider event inbox; approval/action, audit and budget/usage records. Cross-reference actor, target and correlation IDs, not full customer objects in events.                                                                                                                                                                                            |
 
 ### Keys, principals and isolation
 
@@ -71,10 +71,11 @@ Future migrations: version-controlled additive change → dual-compatible reader
 
 ## Phase 3 as implemented (seller and catalogue)
 
-Two additive migrations extend the Phase 2 schema without editing deployed
-history: `0005_seller_catalog.sql` (tables, guards, RLS, audit, seeds) and
-`0006_catalog_privileges.sql` (grants and the `aura.storefront_products` view).
-Both replay after `0001`–`0004` in fresh embedded PostgreSQL and are asserted by
+Three additive migrations extend the Phase 2 schema without editing deployed
+history: `0005_seller_catalog.sql` (tables, guards, RLS, audit, seeds),
+`0006_catalog_privileges.sql` (grants and the `aura.storefront_products` view)
+and `0007_review_separation.sql` (four-eyes review separation). All replay after
+`0001`–`0004` in fresh embedded PostgreSQL and are asserted by
 `tests/migrations.test.ts`.
 
 - **Tables:** `seller_profiles` (PK `org_id`), `categories`, `category_attributes`,
@@ -89,6 +90,11 @@ Both replay after `0001`–`0004` in fresh embedded PostgreSQL and are asserted 
   changes while the product is submitted or archived, and sets
   `pending_changes` on an approved product so the approved revision no longer
   describes the listing.
+- **Review separation:** `review_separation_guard` (migration `0007`) runs on
+  `seller_profiles`, `products` and `product_revisions`. When a review decision
+  changes state it refuses the update if the acting platform administrator holds
+  an active membership of that organization (`review_separation_required`,
+  SQLSTATE `42501`), so four eyes cannot be bypassed with direct SQL.
 - **Lifecycle guards:** `products_guard`, `product_revisions_guard`,
   `product_attribute_values_guard` and `seller_profiles_guard` enforce the
   transition table, immutable content while submitted or archived, approval only

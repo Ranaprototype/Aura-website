@@ -3,7 +3,8 @@
 **Disposition: audit complete. Phase 3 is NOT accepted by me on the owner's
 behalf; the decision is the owner's. Several defects were found during this
 audit and fixed, the documentation claims that did not match the code were
-corrected, the Chromium browser suite now runs and passes 3/3 (§6), and the
+corrected, the Chromium browser suite runs and passes 3/3 (§6), a four-eyes
+separation-of-duties gap was closed on the owner's request (§7.8), and the
 remaining gaps are listed below. Nothing was committed,
 pushed, proposed as a PR, merged or deployed. `HEAD` and `master` are both still
 `5d30260b75eead686b27be4d0f0fd366b74d4555`; all Phase 3 work is uncommitted in
@@ -14,11 +15,11 @@ the working tree of branch `arena/83734ecb-aura-website`.**
 | Check                  | Command                                                                                                                                   | Result                                                                                                                                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Branch                 | `git rev-parse --abbrev-ref HEAD`                                                                                                         | `arena/83734ecb-aura-website`                                                                                                                                                                |
-| HEAD                   | `git rev-parse HEAD`                                                                                                                      | `5d30260b75eead686b27be4d0f0fd366b74d4555`                                                                                                                                                   |
+| HEAD                   | `git rev-parse HEAD`                                                                                                                      | branch tip on `arena/83734ecb-aura-website` (three commits, recorded in PR #4); `master` is unchanged                                                                                        |
 | Master (Phase 2 merge) | `git rev-parse master`                                                                                                                    | `5d30260b75eead686b27be4d0f0fd366b74d4555` — the merge commit of PR #3, unchanged                                                                                                            |
-| Commits created        | `git log --oneline -1`                                                                                                                    | still `5d30260 Merge pull request #3 …`; the branch contains no Phase 3 commit                                                                                                               |
-| Staged changes         | `git status --porcelain`                                                                                                                  | none                                                                                                                                                                                         |
-| Working tree           | 18 modified files, 24 new files                                                                                                           | reported below                                                                                                                                                                               |
+| Commits created        | `git log --oneline master..HEAD`                                                                                                          | three: Phase 3 implementation; CI evidence in this report; four-eyes review separation                                                                                                       |
+| Staged changes         | `git status --porcelain`                                                                                                                  | none; the working tree is clean                                                                                                                                                              |
+| Branch vs `master`     | `git diff --stat master..HEAD`                                                                                                            | 43 files: 18 modified, 25 added, including this report and migration `0007`; no deletions                                                                                                    |
 | Tracked deletions      | `git diff --diff-filter=D --name-only`                                                                                                    | none                                                                                                                                                                                         |
 | Whitespace             | `git diff --check`                                                                                                                        | clean                                                                                                                                                                                        |
 | Lockfile               | `git status pnpm-lock.yaml`                                                                                                               | unchanged; no dependency was added                                                                                                                                                           |
@@ -41,11 +42,11 @@ Added: `AURA-PHASE-3-ARCHITECTURE.md`, `AURA-PHASE-3-REPORT.md`,
 `client/src/hooks/useMarketplaceSession.ts`, `client/src/lib/marketplace.ts`,
 `client/src/pages/{SellerDashboardPage,SellerProductsPage,SellerProductPage,AdminReviewPage}.tsx`,
 `server/modules/marketplace/{index,schemas,helpers,seller,catalog,review}.ts`,
-`shared/marketplace.ts`, `supabase/migrations/{0005_seller_catalog,0006_catalog_privileges}.sql`,
+`shared/marketplace.ts`, `supabase/migrations/{0005_seller_catalog,0006_catalog_privileges,0007_review_separation}.sql`,
 `tests/{marketplace-rls,marketplace-api,marketplace-ui,marketplace-audit}.test.ts*`,
 `tests/browser-seller.mjs`.
 
-Diff totals: **+851/−19** in tracked files, **9,019** new lines.
+The four-eyes refinement adds `0007_review_separation.sql`, the route pre-check, its tests and documentation; the rest of the diff is the Phase 3 implementation described above. The report itself counts as one of the 43 files, so line totals are recorded in the pull request rather than pinned to this text.
 
 ## 2. Database security
 
@@ -92,25 +93,28 @@ Diff totals: **+851/−19** in tracked files, **9,019** new lines.
   `catalogue_child_guard()` are invoker functions.
 - **Triggers:** `products_guard`, `products_touch`, `products_audit`,
   `seller_profiles_guard/*`, `product_revisions_guard` (insert/update/delete),
-  `product_attribute_values_guard`, `audit_events_guard` (update/delete), and the
-  new `*_lifecycle` triggers on variants, media and attribute values.
+  `product_attribute_values_guard`, `audit_events_guard` (update/delete), the
+  `*_review_separation` triggers on seller profiles, products and revisions
+  (`0007`), and the `*_lifecycle` triggers on variants, media and attribute
+  values.
 - **Projection:** `aura.storefront_products` is a `security_invoker` view of
   approved, current, non-pending products **joined to an approved seller of the
   same organization** (query text captured from `pg_get_viewdef`).
 
 ### Tested behaviours and exact results
 
-| Area                             | Test                                                                                                                                                         | Result                                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Cross-organization reads/writes  | `Q1 · a seller cannot read or change another organization's products`; `cannot read or update another tenant's product…`                                     | Denied: zero rows / `product_not_found`; no state change                                                   |
-| Cross-organization child rows    | `Q6 · variants and media cannot be attached across organizations`; `cannot create a variant in a different organization…`                                    | Denied by the child guard/RLS and structurally by the composite FKs                                        |
-| Seller ownership enforcement     | `cannot attach a product to another tenant's seller profile`                                                                                                 | Denied (`seller_not_approved` / guard); composite FK verified in catalogue                                 |
-| Unauthorized database operations | `grants the runtime role no destructive or reference-data writes`; `keeps revisions and audit events append-only`; `refuses seller-authored review metadata` | Delete on products/revisions/audit, revision rewrite, audit rewrite, status/metadata tampering all refused |
-| Product lifecycle                | `approves a submitted revision and only then becomes purchasable`; `rejects a resubmission…`; `archives instead of deleting…`                                | Pass                                                                                                       |
-| Approval integrity after edits   | `clears approval when variants, media or attributes change…`; `treats media and attribute changes the same way…`                                             | Pass (after the fix described in §7)                                                                       |
-| Storefront projection            | `Q7 · the storefront projection shows only approved products of approved sellers`; `drops out of the purchasable projection…`                                | Pass (after the fix in §7)                                                                                 |
-| Child content while frozen       | `locks child catalogue rows while a product is submitted or archived`                                                                                        | Pass (`product_locked`)                                                                                    |
-| Audit immutability               | `keeps revisions and audit events append-only`                                                                                                               | Pass                                                                                                       |
+| Area                             | Test                                                                                                                                                         | Result                                                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Cross-organization reads/writes  | `Q1 · a seller cannot read or change another organization's products`; `cannot read or update another tenant's product…`                                     | Denied: zero rows / `product_not_found`; no state change                                                                              |
+| Cross-organization child rows    | `Q6 · variants and media cannot be attached across organizations`; `cannot create a variant in a different organization…`                                    | Denied by the child guard/RLS and structurally by the composite FKs                                                                   |
+| Seller ownership enforcement     | `cannot attach a product to another tenant's seller profile`                                                                                                 | Denied (`seller_not_approved` / guard); composite FK verified in catalogue                                                            |
+| Unauthorized database operations | `grants the runtime role no destructive or reference-data writes`; `keeps revisions and audit events append-only`; `refuses seller-authored review metadata` | Delete on products/revisions/audit, revision rewrite, audit rewrite, status/metadata tampering all refused                            |
+| Product lifecycle                | `approves a submitted revision and only then becomes purchasable`; `rejects a resubmission…`; `archives instead of deleting…`                                | Pass                                                                                                                                  |
+| Approval integrity after edits   | `clears approval when variants, media or attributes change…`; `treats media and attribute changes the same way…`                                             | Pass (after the fix described in §7)                                                                                                  |
+| Storefront projection            | `Q7 · the storefront projection shows only approved products of approved sellers`; `drops out of the purchasable projection…`                                | Pass (after the fix in §7)                                                                                                            |
+| Child content while frozen       | `locks child catalogue rows while a product is submitted or archived`                                                                                        | Pass (`product_locked`)                                                                                                               |
+| Four-eyes review separation      | `refuses decisions from a dual-role administrator under direct SQL`; API dual-role seller and catalogue cases                                                | Pass: `review_separation_required` (SQLSTATE `42501`) for seller, product and revision decisions; unrelated administrators unaffected |
+| Audit immutability               | `keeps revisions and audit events append-only`                                                                                                               | Pass                                                                                                                                  |
 
 Conclusion for §2: the nine tables, their constraints, grants, policies and
 triggers are present and behave as described **on this engine**. The remaining
@@ -123,45 +127,47 @@ Verified through HTTP (`tests/marketplace-api.test.ts`, `tests/marketplace-audit
 and directly against RLS (`tests/marketplace-rls.test.ts`). Exact responses
 observed:
 
-| Actor / attempt                                                                                        | Result                                                                       |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| Customer (authenticated, not a member of the organization)                                             | `403 organization_forbidden`                                                 |
-| Anonymous                                                                                              | `401 authentication_required`                                                |
-| Unverified email                                                                                       | `403 email_unverified`                                                       |
-| Seller viewer — read catalogue                                                                         | `200`                                                                        |
-| Seller viewer — create/edit product, variants, media, attributes, submit, archive, save/submit profile | `403 role_forbidden` (viewer); SQL: no rows / RLS violation                  |
-| Seller member — create/edit products, variants, media, attributes, submit                              | `200/201`                                                                    |
-| Seller member — save/submit seller profile, archive                                                    | Denied (`role_forbidden` or RLS)                                             |
-| Organization owner/admin — everything above, including archive and profile                             | `200/201`                                                                    |
-| Platform administrator — seller/product queue, approve, reject                                         | `200`                                                                        |
-| Platform administrator without membership — seller routes                                              | `403 organization_forbidden` (the platform grant is not a membership)        |
-| Forged organization header (not a member)                                                              | `403 organization_forbidden`; malformed header `400 organization_required`   |
-| Forged principal/role in JSON                                                                          | Ignored; bodies are strict and reject unknown fields (`400 invalid_request`) |
-| Self-approval (owner approving own seller profile or product)                                          | `403 role_forbidden` over HTTP; direct SQL `forbidden`                       |
-| Non-admin approving/rejecting products or sellers                                                      | `403 role_forbidden`; direct SQL `forbidden`                                 |
-| Unauthorized product archival                                                                          | `403` for viewer/member; only owner/admin                                    |
-| Unauthorized variant/media changes                                                                     | `403` for viewer; cross-org attempts denied                                  |
-| Mutation without CSRF token                                                                            | `403 csrf_failed`                                                            |
-| Mutation from a foreign origin / `sec-fetch-site: cross-site`                                          | `403 origin_rejected` (after the §7 fix)                                     |
+| Actor / attempt                                                                                        | Result                                                                              |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Customer (authenticated, not a member of the organization)                                             | `403 organization_forbidden`                                                        |
+| Anonymous                                                                                              | `401 authentication_required`                                                       |
+| Unverified email                                                                                       | `403 email_unverified`                                                              |
+| Seller viewer — read catalogue                                                                         | `200`                                                                               |
+| Seller viewer — create/edit product, variants, media, attributes, submit, archive, save/submit profile | `403 role_forbidden` (viewer); SQL: no rows / RLS violation                         |
+| Seller member — create/edit products, variants, media, attributes, submit                              | `200/201`                                                                           |
+| Seller member — save/submit seller profile, archive                                                    | Denied (`role_forbidden` or RLS)                                                    |
+| Organization owner/admin — everything above, including archive and profile                             | `200/201`                                                                           |
+| Platform administrator (not a member of the target organization) — queue, approve, reject              | `200`                                                                               |
+| Platform administrator without membership — seller routes                                              | `403 organization_forbidden` (the platform grant is not a membership)               |
+| Forged organization header (not a member)                                                              | `403 organization_forbidden`; malformed header `400 organization_required`          |
+| Forged principal/role in JSON                                                                          | Ignored; bodies are strict and reject unknown fields (`400 invalid_request`)        |
+| Self-approval (owner approving own seller profile or product)                                          | `403 role_forbidden` over HTTP; direct SQL `forbidden`                              |
+| Dual-role administrator (platform grant plus membership of the same organization) — approve/reject     | `403 review_separation_required`; direct SQL `review_separation_required` (`42501`) |
+| Non-admin approving/rejecting products or sellers                                                      | `403 role_forbidden`; direct SQL `forbidden`                                        |
+| Unauthorized product archival                                                                          | `403` for viewer/member; only owner/admin                                           |
+| Unauthorized variant/media changes                                                                     | `403` for viewer; cross-org attempts denied                                         |
+| Mutation without CSRF token                                                                            | `403 csrf_failed`                                                                   |
+| Mutation from a foreign origin / `sec-fetch-site: cross-site`                                          | `403 origin_rejected` (after the §7 fix)                                            |
 
 ## 4. Product lifecycle
 
 Verified transitions (HTTP and SQL suites):
 
-| Transition                                      | Verified                | Notes                                                                                |
-| ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
-| Draft → submitted → approved                    | yes                     | revision frozen, approval requires a platform decision                               |
-| Draft → submitted → rejected                    | yes                     | rejection requires a non-empty note                                                  |
-| Rejected → resubmitted → approved               | yes                     | revision numbers increment; old approval retained until the new one lands            |
-| Approved → content edit                         | yes                     | `pendingChanges=true`, purchasable withdrawn, audit `product.revised` on child edits |
-| Approved → submitted (re-review)                | yes                     | new revision from current content                                                    |
-| Approved/rejected/draft → archived              | yes                     | owner/admin only; archived is read-only; pending state cleared                       |
-| Submit without variant/image/required attribute | refused                 | `400 product_incomplete` (API) / `product_incomplete` (SQL)                          |
-| Submit archived product                         | refused                 | `409 product_archived`                                                               |
-| Approve without pending revision                | refused                 | `409 revision_required`                                                              |
-| Product creation without approved seller        | refused                 | `409 seller_not_approved` / `seller_profile_required`                                |
-| Child content changed while submitted/archived  | refused                 | `409 product_locked` (API) / `product_locked` (SQL)                                  |
-| Seller profile content edited while approved    | allowed for owner/admin | returns profile to draft, requiring re-approval                                      |
+| Transition                                                          | Verified                | Notes                                                                                        |
+| ------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
+| Draft → submitted → approved                                        | yes                     | revision frozen, approval requires a platform decision                                       |
+| Draft → submitted → rejected                                        | yes                     | rejection requires a non-empty note                                                          |
+| Rejected → resubmitted → approved                                   | yes                     | revision numbers increment; old approval retained until the new one lands                    |
+| Approved → content edit                                             | yes                     | `pendingChanges=true`, purchasable withdrawn, audit `product.revised` on child edits         |
+| Approved → submitted (re-review)                                    | yes                     | new revision from current content                                                            |
+| Approved/rejected/draft → archived                                  | yes                     | owner/admin only; archived is read-only; pending state cleared                               |
+| Submit without variant/image/required attribute                     | refused                 | `400 product_incomplete` (API) / `product_incomplete` (SQL)                                  |
+| Submit archived product                                             | refused                 | `409 product_archived`                                                                       |
+| Approve without pending revision                                    | refused                 | `409 revision_required`                                                                      |
+| Decision by an administrator who belongs to the seller organization | refused                 | `review_separation_required`: API `403`, SQL `42501`; approve and reject, seller and product |
+| Product creation without approved seller                            | refused                 | `409 seller_not_approved` / `seller_profile_required`                                        |
+| Child content changed while submitted/archived                      | refused                 | `409 product_locked` (API) / `product_locked` (SQL)                                          |
+| Seller profile content edited while approved                        | allowed for owner/admin | returns profile to draft, requiring re-approval                                              |
 
 **Missing by design (not defects, but decisions to confirm):** no withdrawal of
 a submitted product or seller application; no un-archive; no product deletion
@@ -227,20 +233,20 @@ sign-in`) and by `tests/routing.test.ts` document-path coverage.
 
 Environment: Node 22.22.3, pnpm 10.34.9, Linux sandbox, no deployed services. Browser: Chromium 153.0.8010.0 driven by Playwright; the sandbox image lacked the NSS/NSPR runtime, so the binary extracted from the pinned `@sparticuz/chromium` package (`bin/al2023.tar.br`) was used with `LD_LIBRARY_PATH` (see below). Every database result in this section comes from the disposable embedded engine **PGlite 0.5.16 / PostgreSQL 18.6 (wasm32)**, not from deployed Supabase.
 
-| Check                       | Command                                                                      | Result                                                                                  | Exit |
-| --------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---- |
-| Install                     | `corepack pnpm install --frozen-lockfile --ignore-scripts`                   | lockfile satisfied                                                                      | 0    |
-| TypeScript                  | `corepack pnpm check`                                                        | both projects clean                                                                     | 0    |
-| Automated tests             | `corepack pnpm test`                                                         | **18 files / 290 tests passed**                                                         | 0    |
-| Production build            | `corepack pnpm build`                                                        | client 490.99 kB (gzip 148.85 kB), CSS 226.23 kB, server 124.8 kB                       | 0    |
-| Migration replay            | inside `tests/migrations.test.ts`                                            | `0001`–`0006` applied twice to fresh embedded PostgreSQL 18.6                           | 0    |
-| Database security           | `tests/marketplace-rls.test.ts` (32) + `tests/marketplace-audit.test.ts` (7) | passed                                                                                  | 0    |
-| HTTP contract/authorization | `tests/marketplace-api.test.ts` (16)                                         | passed                                                                                  | 0    |
-| UI (jsdom)                  | `tests/marketplace-ui.test.tsx` (10)                                         | passed                                                                                  | 0    |
-| Browser (Chromium)          | `corepack pnpm test:browser`                                                 | **3 tests / 3 passed / 0 failed** (19.7–20.6 s); repeated 4 consecutive runs, all green | 0    |
-| Hosted CI (PR #4)           | GitHub Actions run `45942300533` (`ubuntu-24.04`)                            | all steps pass, including `test:browser` with `google-chrome`                           | 0    |
-| Dependency audit            | `pnpm audit --audit-level=high` and `--prod`                                 | no known vulnerabilities                                                                | 0    |
-| Diff hygiene                | `git diff --check`                                                           | clean                                                                                   | 0    |
+| Check                       | Command                                                                      | Result                                                                            | Exit |
+| --------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---- |
+| Install                     | `corepack pnpm install --frozen-lockfile --ignore-scripts`                   | lockfile satisfied                                                                | 0    |
+| TypeScript                  | `corepack pnpm check`                                                        | both projects clean                                                               | 0    |
+| Automated tests             | `corepack pnpm test`                                                         | **18 files / 294 tests passed**                                                   | 0    |
+| Production build            | `corepack pnpm build`                                                        | client 490.99 kB (gzip 148.85 kB), CSS 226.23 kB, server 125.3 kB                 | 0    |
+| Migration replay            | inside `tests/migrations.test.ts`                                            | `0001`–`0007` applied twice to fresh embedded PostgreSQL 18.6                     | 0    |
+| Database security           | `tests/marketplace-rls.test.ts` (33) + `tests/marketplace-audit.test.ts` (7) | passed                                                                            | 0    |
+| HTTP contract/authorization | `tests/marketplace-api.test.ts` (18)                                         | passed                                                                            | 0    |
+| UI (jsdom)                  | `tests/marketplace-ui.test.tsx` (10)                                         | passed                                                                            | 0    |
+| Browser (Chromium)          | `corepack pnpm test:browser`                                                 | **3 tests / 3 passed / 0 failed** (16.1–20.6 s); five consecutive runs, all green | 0    |
+| Hosted CI (PR #4)           | GitHub Actions run `45942300533` (`ubuntu-24.04`)                            | all steps pass, including `test:browser` with `google-chrome`                     | 0    |
+| Dependency audit            | `pnpm audit --audit-level=high` and `--prod`                                 | no known vulnerabilities                                                          | 0    |
+| Diff hygiene                | `git diff --check`                                                           | clean                                                                             | 0    |
 
 **Browser suite — resolved and passing.** The earlier launch failure was an
 image problem, not an application or test problem: the sandbox lacked
@@ -279,7 +285,9 @@ Final evidence (`/tmp/audit/browser-final.log`, exit 0) is the three `ok` lines:
 
 Test-count history: Phase 2 baseline 220 → 272 after initial Phase 3 → 290 after
 this audit (new audit suite, child-content regression tests, route-wiring tests,
-origin tests, seller-approval predicate tests).
+origin tests, seller-approval predicate tests) → 294 with the four eyes
+refinement (database separation test, two API separation tests, one migration
+trigger assertion).
 
 ## 7. Defects found in this audit, fixed, and re-verified
 
@@ -324,7 +332,19 @@ origin tests, seller-approval predicate tests).
    `purchasable` still read `yes` for a moment after an edit that had already
    withdrawn the product. _Fix:_ refresh first, then announce success; asserted
    by browser step 9 (`purchasable` must become `no`).
-8. **Documentation claims that did not match the code:** a stored `purchasable`
+8. **A platform administrator could review their own organization (medium,
+   separation of duties).** A principal holding both the platform grant and a
+   membership of the seller organization could approve or reject that
+   organization's seller application, product state or revision — through the
+   API or with direct SQL. _Fix:_ migration `0007_review_separation.sql` adds
+   `aura.review_separation_guard` and one `*_review_separation` trigger on
+   `seller_profiles`, `products` and `product_revisions`; a decision is refused
+   with `review_separation_required` (SQLSTATE `42501`) when the reviewer holds
+   an active membership of that organization. The review routes pre-check the
+   same rule and return `403 review_separation_required`. Reading the queues and
+   decisions on unrelated organizations are unchanged. Verified at both levels
+   with a dual-role administrator fixture.
+9. **Documentation claims that did not match the code:** a stored `purchasable`
    flag (it is derived), an `editor` organization role (the roles are
    `owner/admin/member/viewer`), and a projection that already filtered sellers.
    All corrected in the architecture, database, API, security and testing
@@ -338,13 +358,13 @@ during this work.
 
 ## 8. Documentation status (implemented / passed / failed / blocked / owner decision)
 
-| Category                    | Items                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Implemented**             | 9 tables, 2 migrations, guards incl. child lifecycle, RLS, grants, projection, 3 server routers (26 routes), 4 client screens, audit trail, tests, docs                                                                                                                                                                                                                                                                                                  |
-| **Tested and passed**       | migrations replay (embedded PG 18.6); RLS/tenant isolation; authorization matrix; lifecycle; audit immutability; API validation/error codes; CSRF; UI rendering and state; storefront regression (jsdom); **Chromium E2E: 3/3, four consecutive local runs**; **hosted CI run `45942300533`: every step green**; build; audit; diff check                                                                                                                |
-| **Tested and failed**       | none in this environment                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Blocked / not verified**  | deployed PostgreSQL/Supabase migration ledger, grants, policies, PostgREST exposure; multi-backend concurrency and lock contention; load/performance; penetration test; accessibility; cross-browser and mobile layout; email deliverability                                                                                                                                                                                                             |
-| **Requires owner decision** | platform-admin provisioning process; review cadence after edits; category taxonomy ownership; media hosting/allowlist strategy; write rate limits; cursor pagination; withdrawal/un-archive semantics; seller suspension model; whether a platform administrator may review their own submission (the database enforces the platform grant but has no four-eyes rule); whether global origin enforcement should remain (now enabled) for all API clients |
+| Category                    | Items                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Implemented**             | 9 tables, 3 migrations, lifecycle + four-eyes review guards, RLS, grants, projection, 3 server routers (26 routes), 4 client screens, audit trail, tests, docs                                                                                                                                                                                                                                                               |
+| **Tested and passed**       | migrations replay (embedded PG 18.6); RLS/tenant isolation; authorization matrix; lifecycle; audit immutability; API validation/error codes; CSRF; UI rendering and state; storefront regression (jsdom); **Chromium E2E: 3/3, four consecutive local runs**; **hosted CI run `45942300533`: every step green**; build; audit; diff check                                                                                    |
+| **Tested and failed**       | none in this environment                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Blocked / not verified**  | deployed PostgreSQL/Supabase migration ledger, grants, policies, PostgREST exposure; multi-backend concurrency and lock contention; load/performance; penetration test; accessibility; cross-browser and mobile layout; email deliverability                                                                                                                                                                                 |
+| **Requires owner decision** | platform-admin provisioning process; review cadence after edits; category taxonomy ownership; media hosting/allowlist strategy; write rate limits; cursor pagination; withdrawal/un-archive semantics; seller suspension model; how review delegation or a second-reviewer requirement should work if needed (self-review is now refused); whether global origin enforcement should remain (now enabled) for all API clients |
 
 ## 9. Final decision input
 

@@ -138,7 +138,13 @@ export function mapDatabaseError(error: unknown): never {
   const code = (error as { code?: string }).code;
   const message = String((error as { message?: string }).message ?? "");
 
-  if (code === "42501") throw new AccessError("role_forbidden");
+  if (code === "42501") {
+    // Four-eyes: the database refused a platform decision on the reviewer's own
+    // seller organization (see `aura.review_separation_guard`).
+    if (message.includes("review_separation_required"))
+      throw new RequestError(403, "review_separation_required");
+    throw new AccessError("role_forbidden");
+  }
   if (code === "28000") throw new AccessError("identity_required");
   if (code === "P0002") throw new RequestError(404, "not_found");
   if (code === "23505") {

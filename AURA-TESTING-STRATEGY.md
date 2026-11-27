@@ -41,7 +41,7 @@ Future gates: real isolated Supabase integration and metadata/grant comparison; 
 
 ## Phase 3 additions (seller and catalogue)
 
-`corepack pnpm test` now runs 18 files / 290 tests (baseline 220). Every database
+`corepack pnpm test` now runs 18 files / 294 tests (baseline 220). Every database
 assertion runs on **PostgreSQL 18.6 via PGlite 0.5.16 (wasm32)** exposed over the
 wire protocol as the restricted `aura_app` role — not a deployed PostgreSQL
 instance. The Phase 3 layers, in order of strength:
@@ -51,7 +51,7 @@ instance. The Phase 3 layers, in order of strength:
   names, per-table grants (no product/revision/audit `DELETE`, read-only
   categories), `SECURITY DEFINER` plus pinned `search_path` and no `PUBLIC`
   execute on `is_platform_admin` and `build_product_snapshot`.
-- `tests/marketplace-rls.test.ts` (32 tests): real engine, restricted `aura_app`
+- `tests/marketplace-rls.test.ts` (33 tests): real engine, restricted `aura_app`
   role. Cross-tenant reads/writes, child rows under a foreign product, forged
   tenant settings, role matrices, completeness checks, revision freezing,
   approval/rejection, archive, audit immutability, seller-authored review
