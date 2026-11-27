@@ -5,9 +5,9 @@ This directory contains the **planning and validation materials only** for AURA 
 - **Repository:** `Ranaprototype/Aura-website`
 - **Review branch:** `arena/091f37f6-aura-website` (this session's branch name is fixed by the platform; a branch named `phase-4-review-materials` cannot be created here, so the materials live in this directory instead).
 - **Base / verified master:** `b12a5596bf3b454b844c5d3b5bc83784247e300f` (PR #4 merge; unchanged).
-- **Status:** prepared for review. **No PR, no merge, no deployment, no Phase 4 implementation.** Implementation awaits explicit owner approval (register D-22).
+- **Status:** prepared for review; **second-review corrections applied (2026-11-27)** — discovery search/filter/sort restored to scope, cursor pagination fixed and tested (16 checks), SECURITY DEFINER ownership made explicit, defense-in-depth public policies completed. Evidence: 92/92 SQL + 16/16 cursor + 9/9 probes + 3/3 browser baseline (preserved). **No PR, no merge, no deployment, no Phase 4 implementation.** Implementation awaits explicit owner approval (register D-22) and the discovery UX choices (D-23/D-24/D-25 — registered, not decided).
 
-## Contents (13 deliverables)
+## Contents (16 deliverables)
 
 ### Specification documents
 | File | Purpose |
@@ -21,20 +21,24 @@ This directory contains the **planning and validation materials only** for AURA 
 | File | Purpose |
 | --- | --- |
 | [`validation/phase-4/README.md`](validation/phase-4/README.md) | How the disposable validation works + findings that changed the design. |
-| [`validation/phase-4/validate.ts`](validation/phase-4/validate.ts) | Replays real `0001`–`0007` on disposable PGlite, applies the proposals, asserts **76 checks**. |
+| [`validation/phase-4/validate.ts`](validation/phase-4/validate.ts) | Replays real `0001`–`0007` on disposable PGlite, applies the proposals, asserts **92 checks** (incl. definer ownership catalogs 1.16–1.19, search/filter/sort 2.16–2.20, defense-in-depth simulated-grant negatives 2.21–2.29). |
+| [`validation/phase-4/cursor.ts`](validation/phase-4/cursor.ts) | Reference cursor signer/verifier: HMAC-SHA256, sort-consistent keyset (`[approvedAt, slug]` / `[title, slug]`), binding to route+search+filters+sort+limit. |
+| [`validation/phase-4/cursor.test.ts`](validation/phase-4/cursor.test.ts) | **16 executable cursor tests**: contract negatives (tamper, mismatch, malformed) + PGlite pagination coverage (no duplicates/omissions; newest/title/search). |
 | [`validation/phase-4/probe-app.ts`](validation/phase-4/probe-app.ts) | **9 probes** against the real Express app (disposable DB harness). |
 | [`validation/phase-4/proposed/0008_public_storefront.sql`](validation/phase-4/proposed/0008_public_storefront.sql) | Proposed additive migration: suspension overlay + confidential-note accessor, `aura_public` (zero base grants), definer discovery views, policy scoping, limiter, redirects. |
 | [`validation/phase-4/proposed/0009_global_product_slugs.sql`](validation/phase-4/proposed/0009_global_product_slugs.sql) | Proposed additive migration: deterministic cross-org slug dedupe + global unique index. |
 | [`validation/phase-4/proposed/rollback_0009_global_product_slugs.sql`](validation/phase-4/proposed/rollback_0009_global_product_slugs.sql) | Reviewed rollback (restores originals, removes only collision redirects, aborts on drift). |
-| [`validation/phase-4/results/sql-validation.log`](validation/phase-4/results/sql-validation.log) | Executed evidence: **76 passed / 0 failed**. |
+| [`validation/phase-4/results/sql-validation.log`](validation/phase-4/results/sql-validation.log) | Executed evidence: **92 passed / 0 failed**. |
+| [`validation/phase-4/results/cursor-tests.log`](validation/phase-4/results/cursor-tests.log) | Executed evidence (reported separately per owner request): **16 passed / 0 failed**. |
 | [`validation/phase-4/results/app-probe.log`](validation/phase-4/results/app-probe.log) | Executed evidence: **9 passed / 0 failed**. |
 | [`validation/phase-4/results/browser-baseline.log`](validation/phase-4/results/browser-baseline.log) | Executed evidence: **3 tests / 3 pass / 0 fail / 0 skipped / 0 todo**. |
 
-Integrity: [`SHA256SUMS.txt`](SHA256SUMS.txt) lists the SHA-256 of each of the 13 deliverables (verify with `sha256sum -c SHA256SUMS.txt` from this directory).
+Integrity: [`SHA256SUMS.txt`](SHA256SUMS.txt) lists the SHA-256 of each of the 16 deliverables (verify with `sha256sum -c SHA256SUMS.txt` from this directory).
 
 ## Executed evidence summary
 
-- **SQL:** PGlite 0.5.16 / PostgreSQL 18.6, real `0001`–`0007` + proposed `0008`/`0009`/rollback → **76/76** (roles/zero-base-grants/EXECUTE/definer-view; anonymous reads + negative paths + exact API list SQL; suspension lifecycle/four-eyes/freeze/restore/note-confidentiality; slug backfill/redirects/rollback/drift; limiter isolation; double replay).
+- **SQL:** PGlite 0.5.16 / PostgreSQL 18.6, real `0001`–`0007` + proposed `0008`/`0009`/rollback → **92/92** (roles/zero-base-grants/EXECUTE/definer-view + **ownership catalogs**; anonymous reads + negative paths + exact API list SQL + **search/attribute-filter/title-sort**; **defense-in-depth simulated-grant negatives**; suspension lifecycle/four-eyes/freeze/restore/note-confidentiality; slug backfill/redirects/rollback/drift; limiter isolation; double replay).
+- **Cursor (reported separately):** `cursor.test.ts` → **16/16** (round-trip; tampered payload/signature; wrong secret; mismatched route/search/category/attribute/sort/limit; attr-order independence; malformed payloads; PGlite pagination with no duplicates/omissions for newest, title and search-bound lists).
 - **App probes:** real Express harness → **9/9** (no-store mount-order defect confirmed; anonymous GET/CSRF compatibility; cross-site mutation refusal; uniform API 404; authenticated seller requirement).
 - **Browser baseline:** **3/3** (auth/verification/recovery/protected routes; seller onboarding→approval; catalogue→configurator→local cart→unavailable checkout containment). Sandbox-only NSS workaround; no repository file changed for it. Hosted CI (`google-chrome`) remains the authoritative browser gate.
 

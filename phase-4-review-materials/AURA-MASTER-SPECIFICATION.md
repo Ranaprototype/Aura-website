@@ -89,9 +89,9 @@ Non-negotiable product invariants (from the approved architecture):
 - `aura.storefront_products` projection (security-invoker view) — **not exposed over HTTP** at baseline. No public catalogue endpoint exists (verified: `GET /api/v1/storefront/products` → `404 not_found`).
 - **No price, currency, stock, shipping or manufacturing field exists anywhere** — by design.
 
-**B — Approved, not implemented:** public storefront read API and pages, globally unique slugs + redirects, seller suspension (all designed in [AURA-PHASE-4-PLAN.md](AURA-PHASE-4-PLAN.md)); offers/pricing, inventory, server cart, orders (roadmap Phase 5).
+**B — Approved, not implemented:** public storefront read API and pages **with discovery search/filter/sort** (owner-restored scope; UX menus gated by D-23/D-24/D-25), globally unique slugs + redirects, seller suspension (all designed in [AURA-PHASE-4-PLAN.md](AURA-PHASE-4-PLAN.md)); offers/pricing, inventory, server cart, orders (roadmap Phase 5).
 
-**C — Future:** search/indexing, recommendations, media uploads/CDN (replaces URL references under an approved storage policy), seller-initiated slug renames.
+**C — Future:** semantic/vector search and dedicated search-index infrastructure (basic discovery search/filter/sort is **in Phase 4 scope**, owner-restored 2026-11-27; user-facing menus gated by D-23/D-24/D-25), recommendations, media uploads/CDN (replaces URL references under an approved storage policy), seller-initiated slug renames.
 
 **D — Owner decisions:** D-01 (public URL scheme vs preview configurators), D-02 (public field allowlist), D-04 (global slug policy), D-15 (taxonomy ownership), D-16 (withdrawal/un-archive), D-20 (catalogue write rate limits).
 
@@ -241,7 +241,9 @@ These corrections are recorded here so future agents do not re-litigate them. Th
 - **Class II — Technical implementation decisions already covered by approved requirements.** Taken by the agent within approved requirements; recorded so they are not reconsidered. No owner approval needed.
 - **Class III — Decisions deferrable to later phases.** Each carries the gate at which it must be decided.
 
-**Status of D-01–D-04:** on 2026-11-27 the owner issued explicit corrections resolving these four decisions (remove public seller storefronts from Phase 4; minimise anonymous discovery data; restrict suspension-note visibility; keep global slugs with predictable legacy behaviour and no seller renames). They are recorded below as **OWNER-DIRECTED** and are reflected in the proposed SQL and validation evidence. **Implementation approval is still withheld** — the only remaining Class I gate for Phase 4 is the owner's explicit go-ahead to implement. Previously approved requirements are preserved and are **not** re-asked.
+**Status of D-01–D-04:** on 2026-11-27 the owner issued explicit corrections resolving these four decisions (remove public seller storefronts from Phase 4; minimise anonymous discovery data; restrict suspension-note visibility; keep global slugs with predictable legacy behaviour and no seller renames). They are recorded below as **OWNER-DIRECTED** and are reflected in the proposed SQL and validation evidence.
+
+**Status of the second review round (2026-11-27, published-package review):** the owner identified four defects, all now corrected in the proposal and evidence: (1) **product search, filtering and sorting restored to Phase 4 scope** (API contract, frontend plan, query design and acceptance criteria updated; unresolved user-facing choices registered separately as **D-23/D-24/D-25** — recommendations are not decisions); (2) **cursor pagination fixed and tested** — payload keyset now matches the actual ordering (`[approvedAt, slug]` / `[title, slug]`, never an internal id), bound to route+search+filters+sort+limit, 16 executable tests (`cursor.test.ts`); (3) **SECURITY DEFINER ownership made explicit** — 0008 §8 reassigns the views to the non-superuser NOBYPASSRLS catalog table owner, with catalog-level assertions (1.16–1.19); (4) **public defense-in-depth RLS policies completed** — they now enforce approved seller + no suspension, with simulated-grant negative tests across products/variants/media/attributes (2.21–2.29). Evidence: **92/92 SQL + 16/16 cursor + 9/9 app probes; browser baseline 3/3 preserved**. **Implementation approval (D-22) is still withheld**; the Class I gates for Phase 4 are now D-22 plus the discovery UX choices D-23/D-24/D-25. Previously approved requirements are preserved and are **not** re-asked.
 
 ### Class I — Owner decisions requiring explicit approval
 
@@ -282,21 +284,36 @@ These corrections are recorded here so future agents do not re-litigate them. Th
 - **Gate:** Separate owner approval before any public seller surface or seller disclosure field is added.
 
 #### D-22 · Phase 4 implementation go-ahead — OPEN
-- **Question:** Approve implementation of Phase 4 exactly as specified in `AURA-PHASE-4-PLAN.md` and the proposed migrations, per the owner-directed D-01–D-04?
-- **Why it matters:** The owner has withheld implementation approval pending review of the corrected documents and evidence.
+- **Question:** Approve implementation of Phase 4 exactly as specified in `AURA-PHASE-4-PLAN.md` and the proposed migrations, per the owner-directed D-01–D-04 and the restored discovery scope?
+- **Why it matters:** The owner has withheld implementation approval pending review of the corrected documents and evidence (second review round corrections applied 2026-11-27).
 - **Gate:** Explicit owner authorization before any implementation, commit, push, PR, merge or deploy.
+
+#### D-23 · Discovery search: fields and semantics — OPEN (user-facing choice, registered not decided)
+- **Question:** Which fields does public search cover, and with what matching semantics? Validated recommendation: case-insensitive word matching over **title + summary** (`to_tsvector('simple', …) @@ websearch_to_tsquery`), 1–100 character queries.
+- **Alternatives / consequences:** adding description/attribute text widens matches but slows queries and can surface odd snippets; prefix/typo-tolerant matching needs trigram infrastructure (deferred with semantic search). Empty/absent `q` = unfiltered list.
+- **Gate:** Confirm with D-22 before implementation; the recommendation is executed in validation (2.18) but is **not** an approved product decision.
+
+#### D-24 · Discovery sort options and default — OPEN (user-facing choice, registered not decided)
+- **Question:** Which sort orders are offered, and which is the default? Validated recommendation: **`newest` (default; approved_at DESC, slug DESC)** and **`title` (A–Z; title ASC, slug ASC)**.
+- **Alternatives / consequences:** relevance ranking for searched lists needs a ranking decision and is not proposed; price/popularity sorts are impossible (no price/sales data in Phase 4). Every offered sort needs a matching cursor keyset (implemented for both recommended sorts).
+- **Gate:** Confirm with D-22 before implementation; recommendation executed in validation (2.20, cursor B1/B2), not approved.
+
+#### D-25 · Discovery filter facets — OPEN (user-facing choice, registered not decided)
+- **Question:** Which filters are exposed in the UI? Validated recommendation: **category** (slug chips) and **attribute key:value** (repeatable `attr` parameter, e.g. `material:knit`). Which attributes become visible facet chips (all category attributes vs a curated subset) is a product choice.
+- **Alternatives / consequences:** curated facets need a taxonomy decision (interacts with D-15); no seller filter (D-01); no price/stock filters (no such data). Filters combine with AND and are cursor-bound.
+- **Gate:** Confirm with D-22 before implementation; recommendation executed in validation (2.17/2.19), not approved.
 
 ### Class II — Technical implementation decisions already covered by approved requirements (no approval needed)
 
 | ID | Decision | Rationale / evidence |
 | --- | --- | --- |
 | T-01 | Scope every helper-calling RLS policy `TO aura_app` (`ALTER POLICY`) instead of granting helper EXECUTE to the public role. | Executed validation proved public reads otherwise fail with `permission denied for function is_active_member`; granting EXECUTE + caller-set principal would create a membership oracle. `validation/phase-4/results/sql-validation.log` 1.12. |
-| T-02 | Public reads = **SECURITY DEFINER discovery views** (owner-owned, no `security_invoker`) with **zero base-table grants** to `aura_public`; the view `WHERE` is the publication predicate and the view selects only slug-keyed discovery columns. Base RLS policies remain as defense-in-depth. | Directed by D-02: `security_invoker` + column grants cannot hide internal ids (every join/predicate column would be granted and directly queryable). Definer views expose no internal identifier and call no functions (no search_path execution hazard). Validated 1.3–1.5/1.14/2.x. |
+| T-02 | Public reads = **SECURITY DEFINER discovery views** (no `security_invoker`) with **zero base-table grants** to `aura_public`; the view `WHERE` is the publication predicate and the view selects only slug-keyed discovery columns. **Ownership explicit (owner item 3):** 0008 §8 reassigns the views to the catalog table owner — non-superuser, NOBYPASSRLS, owns every base table read; views reach base rows via table ownership (aura tables use ENABLE, not FORCE RLS), never via a privileged login or public grant. **Defense-in-depth policies complete (owner item 4):** public product/child/redirect policies enforce approved seller + no suspension, mirroring the view predicate. | Directed by D-02: `security_invoker` + column grants cannot hide internal ids. Definer views expose no internal identifier and call no functions. Validated 1.3–1.5/1.14/1.16–1.19/2.x/2.21–2.29. |
 | T-03 | Suspension as overlay columns, not a new status value; the confidential note is hidden from `aura_app` by column grant and read only through the `aura.seller_suspension_note(uuid)` definer accessor (owner/admin of the org or platform admin); audit detail records `noteRecorded`, never the note text. | Preserves approved state exactly; enforces D-03 note confidentiality. Validated 1.15/3.2/3.5–3.10/3.21/3.25. |
 | T-04 | Backfill disables only `products_guard`, `products_touch`, `products_catalogue_suspension` (owner privilege; no `session_replication_role`, no superuser requirement); audit trigger stays active. | Validated 4.1/4.2 (failure without) and 4.6/4.7 (preserved timestamps, audited renames). |
 | T-05 | `slug_redirects` stores `replacement_slug`; live product wins resolution; rollback aborts on drift. | Validated 4.9–4.14. |
 | T-06 | Separate `aura.public_rate_limits` table; two-way grant isolation from `aura.auth_rate_limits`. | Validated 5.1–5.3. |
-| T-07 | HMAC-SHA256 signed cursors via `node:crypto` (no new dependency); secret required in production, ephemeral in dev. | Tamper-evident pagination; constant-time compare. |
+| T-07 | HMAC-SHA256 signed cursors via `node:crypto` (no new dependency); secret required in production, ephemeral in dev. **Keyset matches the query ordering** (`[approvedAt, slug]` newest / `[title, slug]` title; full timestamp precision; never an internal id) and the payload is **bound to route + search + filters + sort + limit** (owner item 2). | Tamper-evident pagination; constant-time compare of signature and binding. Executed: `cursor.test.ts` 16/16 (contract negatives + PGlite no-duplicate/no-omission coverage). |
 | T-08 | `TRUST_PROXY` explicit config (default off); `req.ip` used for rate buckets only when configured. | Prevents proxy-header spoofing and shared-bucket lockouts. |
 | T-09 | Move the `no-store` header middleware before the `/api/v1` mounts. | Confirmed defect: v1 responses lack no-store today (`app-probe.log` A.3). |
 | T-10 | Uniform `404 {"error":"not_found"}` for every public miss (unknown/malformed slug, draft, submitted, rejected, archived, pending-changes, suspended, redirect-to-unpublished). | No existence oracle. |
@@ -332,6 +349,6 @@ These corrections are recorded here so future agents do not re-litigate them. Th
 
 - The repository is the only verified environment. No deployed Supabase/PostgreSQL, provider, CDN or mail relay has been inspected; deployed grants/PostgREST exposure remain an owner gate.
 - PGlite (PostgreSQL 18.6 WASM, single process) validates SQL semantics, not multi-backend concurrency. Contention-sensitive phases (5/6/11) require a real disposable PostgreSQL before acceptance.
-- The Phase 4 plan's SQL was executed on disposable PGlite (76 checks) and the app probes on the real Express harness (9 checks); implementation tests are proposed, not yet written.
+- The Phase 4 plan's SQL was executed on disposable PGlite (**92 checks**, incl. ownership catalog assertions and simulated-grant defense-in-depth negatives), the cursor contract on PGlite + `node:crypto` (**16 checks**), and the app probes on the real Express harness (9 checks); browser baseline 3/3 preserved. Implementation tests are proposed, not yet written.
 - Product vision statements derive from the approved architecture set; no functionality has been invented beyond it. Anything not evidenced in code is tagged B/C/D, never A.
 - Historical security incidents remain open and owner-led; this specification neither closes nor investigates them.

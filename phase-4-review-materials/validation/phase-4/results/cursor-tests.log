@@ -1,0 +1,106 @@
+TAP version 13
+# Subtest: A1 round-trip: sign then verify with the same binding returns the key
+ok 1 - A1 round-trip: sign then verify with the same binding returns the key
+  ---
+  duration_ms: 2085.551954
+  type: 'test'
+  ...
+# Subtest: A2 tampered payload is rejected
+ok 2 - A2 tampered payload is rejected
+  ---
+  duration_ms: 0.594961
+  type: 'test'
+  ...
+# Subtest: A3 tampered signature is rejected
+ok 3 - A3 tampered signature is rejected
+  ---
+  duration_ms: 0.223828
+  type: 'test'
+  ...
+# Subtest: A4 wrong secret is rejected
+ok 4 - A4 wrong secret is rejected
+  ---
+  duration_ms: 0.134822
+  type: 'test'
+  ...
+# Subtest: A5 mismatched route is rejected
+ok 5 - A5 mismatched route is rejected
+  ---
+  duration_ms: 0.25827
+  type: 'test'
+  ...
+# Subtest: A6 mismatched search term is rejected
+ok 6 - A6 mismatched search term is rejected
+  ---
+  duration_ms: 0.184335
+  type: 'test'
+  ...
+# Subtest: A7 mismatched category filter is rejected
+ok 7 - A7 mismatched category filter is rejected
+  ---
+  duration_ms: 0.167121
+  type: 'test'
+  ...
+# Subtest: A8 mismatched attribute filter is rejected
+ok 8 - A8 mismatched attribute filter is rejected
+  ---
+  duration_ms: 0.235965
+  type: 'test'
+  ...
+# Subtest: A9 mismatched sort order is rejected
+ok 9 - A9 mismatched sort order is rejected
+  ---
+  duration_ms: 0.264253
+  type: 'test'
+  ...
+# Subtest: A10 mismatched page limit is rejected
+ok 10 - A10 mismatched page limit is rejected
+  ---
+  duration_ms: 0.276697
+  type: 'test'
+  ...
+# Subtest: A11 attribute order does not change the binding (canonical hash)
+ok 11 - A11 attribute order does not change the binding (canonical hash)
+  ---
+  duration_ms: 0.216348
+  type: 'test'
+  ...
+# Subtest: A12 malformed payloads are rejected
+ok 12 - A12 malformed payloads are rejected
+  ---
+  duration_ms: 0.426128
+  type: 'test'
+  ...
+# Subtest: B1 newest-sort pagination: no duplicates, no omissions, correct order
+ok 13 - B1 newest-sort pagination: no duplicates, no omissions, correct order
+  ---
+  duration_ms: 5.975769
+  type: 'test'
+  ...
+# Subtest: B2 title-sort pagination: no duplicates, no omissions, correct order
+ok 14 - B2 title-sort pagination: no duplicates, no omissions, correct order
+  ---
+  duration_ms: 5.85327
+  type: 'test'
+  ...
+# Subtest: B3 search-bound pagination: cursor bound to the search term, full coverage
+ok 15 - B3 search-bound pagination: cursor bound to the search term, full coverage
+  ---
+  duration_ms: 6.917993
+  type: 'test'
+  ...
+# Subtest: B4 a cursor cannot jump between sorts (newest cursor rejected under title sort)
+ok 16 - B4 a cursor cannot jump between sorts (newest cursor rejected under title sort)
+  ---
+  duration_ms: 0.155878
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2391.992756

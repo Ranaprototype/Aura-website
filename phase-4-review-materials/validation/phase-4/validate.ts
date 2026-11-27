@@ -254,6 +254,31 @@ async function main() {
   await submitAndApprove(pB2, orgB, ids.ownerB);
   ids.pA = pA; ids.pB = pB; ids.pB2 = pB2; ids.revA = revA; ids.revB = revB;
 
+  // Org C: an UNAPPROVED seller that still has an approved product (item 4
+  // defense-in-depth fixture). A material business-info change returns an
+  // approved seller to draft (the designed re-review path), leaving pC approved
+  // under a now-unapproved seller.
+  await mkPrincipal("ownerC", "owner-c@example.test");
+  const orgC = (await unit("aura_app", ids.ownerC, () =>
+    q(`select (aura.create_organization('Org C', 'org-c')).id as id`)))[0].id;
+  ids.orgC = orgC;
+  const sellerC = await onboardSeller(orgC, ids.ownerC, "Cypress Works");
+  ids.sellerC = sellerC;
+  const pC = await createProduct(orgC, sellerC, ids.ownerC, "cypress-runner", "Cypress Runner", 1);
+  await furnish(pC, orgC, ids.ownerC, "C-1");
+  await submitAndApprove(pC, orgC, ids.ownerC);
+  ids.pC = pC;
+  await unit("aura_app", ids.ownerC, () =>
+    q(`update aura.seller_profiles set legal_name = 'Cypress Works Revised Legal' where id = $1`, [sellerC]));
+
+  // ---- Catalog owner (item 3): a NON-superuser, NOBYPASSRLS role owns the base
+  //      tables + schema; 0008 §8 (re)assigns the definer views to it. ---------
+  await q(`create role aura_catalog_owner nologin nosuperuser nobypassrls nocreaterole nocreatedb`);
+  await q(`alter schema aura owner to aura_catalog_owner`);
+  for (const t of ["products", "seller_profiles", "product_variants", "product_media",
+                   "product_attribute_values", "categories", "category_attributes"])
+    await q(`alter table aura.${t} owner to aura_catalog_owner`);
+
   // ---- Proposed 0008 -------------------------------------------------------
   await exec(await readFile(path.join(proposedDir, "0008_public_storefront.sql"), "utf8"));
   console.log("Applied proposed 0008_public_storefront.sql\n");
@@ -348,6 +373,41 @@ async function main() {
     (await q(`select has_column_privilege('aura_app', 'aura.seller_profiles', 'display_name', 'SELECT') as ok`))[0].ok &&
     (await q(`select has_column_privilege('aura_app', 'aura.seller_profiles', 'suspended_at', 'SELECT') as ok`))[0].ok &&
     (await q(`select has_function_privilege('aura_app', 'aura.seller_suspension_note(uuid)', 'EXECUTE') as ok`))[0].ok);
+  const definerViews = ["public_products", "public_product_variants", "public_product_media",
+    "public_product_attributes", "public_slug_redirects"];
+  const viewOwners = await q(
+    `select c.relname, r.rolname as owner from pg_class c join pg_roles r on r.oid = c.relowner
+      where c.relnamespace = (select oid from pg_namespace where nspname = 'aura')
+        and c.relname = any($1)`, [definerViews]);
+  ok("1.16 all five definer views are owned by the catalog owner (not a privileged migration role)",
+    viewOwners.length === 5 && viewOwners.every(r => r.owner === "aura_catalog_owner"),
+    JSON.stringify(viewOwners));
+  const catOwner = (await q(
+    `select rolcanlogin, rolsuper, rolbypassrls from pg_roles where rolname = 'aura_catalog_owner'`))[0];
+  const baseOwned = (await q(
+    `select count(*)::int as n from pg_class c join pg_roles r on r.oid = c.relowner
+      where c.relnamespace = (select oid from pg_namespace where nspname = 'aura')
+        and c.relname = any($1) and r.rolname = 'aura_catalog_owner'`,
+    [["products", "seller_profiles", "product_variants", "product_media",
+      "product_attribute_values", "categories", "category_attributes", "slug_redirects"]]))[0].n;
+  ok("1.17 catalog owner is nologin/nosuperuser/nobypassrls and owns every base table the views read",
+    !catOwner.rolcanlogin && !catOwner.rolsuper && !catOwner.rolbypassrls && baseOwned === 8,
+    `baseOwned=${baseOwned}`);
+  const invokerFlags = await q(
+    `select c.relname, coalesce(c.reloptions::text, '') as ro from pg_class c
+      where c.relnamespace = (select oid from pg_namespace where nspname = 'aura')
+        and c.relname = any($1)`, [definerViews]);
+  ok("1.18 all five public views are SECURITY DEFINER (security_invoker not set)",
+    invokerFlags.length === 5 && invokerFlags.every(r => !r.ro.includes("security_invoker=true")),
+    JSON.stringify(invokerFlags));
+  let effViews = true, effBase = false;
+  for (const v of definerViews)
+    if (!(await q(`select has_table_privilege('aura_public', 'aura.${v}', 'SELECT') as ok`))[0].ok) effViews = false;
+  for (const t of ["products", "seller_profiles", "product_variants", "product_media",
+                   "product_attribute_values", "categories", "category_attributes", "slug_redirects"])
+    if ((await q(`select has_table_privilege('aura_public', 'aura.${t}', 'SELECT') as ok`))[0].ok) effBase = true;
+  ok("1.19 effective grants: aura_public SELECT on the five views only, zero base-table SELECT",
+    effViews && !effBase);
 
   // == Group 2: anonymous reads via definer views; base tables fully denied ====
   const pub = await unit("aura_public", null, () =>
@@ -430,17 +490,87 @@ async function main() {
                 where m.product_slug = p.slug order by m.position limit 1) as hero_image
          from aura.public_products p
         where ($1::text is null or p.category_slug = $1)
-          and ($2::timestamptz is null or (p.approved_at, p.slug) < ($2, $3))
+          and ($2::text is null
+               or to_tsvector('simple', p.title || ' ' || coalesce(p.summary, ''))
+                  @@ websearch_to_tsquery('simple', $2))
+          and ($3::text is null or exists (
+                select 1 from aura.public_product_attributes a
+                 where a.product_slug = p.slug and a.key = $3 and a.value = $4))
+          and ($5::timestamptz is null or (p.approved_at, p.slug) < ($5, $6))
         order by p.approved_at desc, p.slug desc
-        limit $4`, [null, null, null, 24])
+        limit $7`, [null, null, null, null, null, null, 24])
   );
-  ok("2.16 exact API list query runs as aura_public (no seller, no internal ids, slug keyset)",
+  ok("2.16 exact API list query (search/filter/sort capable) runs as aura_public; slug keyset, no ids/seller",
     listRows.length === 3 && listRows.every(r => r.hero_image && r.category_slug === "sneakers"),
     JSON.stringify(listRows.map(r => r.slug)));
   const catFilter = await unit("aura_public", null, () =>
     q(`select count(*)::int as n from aura.public_products where category_slug = 'apparel'`)
   );
   ok("2.17 category filter narrows correctly (apparel has no published products)", catFilter[0].n === 0);
+  const searchRows = await unit("aura_public", null, () =>
+    q(`select slug from aura.public_products
+        where to_tsvector('simple', title || ' ' || coalesce(summary, ''))
+              @@ websearch_to_tsquery('simple', $1)
+        order by approved_at desc, slug desc`, ["aurora"])
+  );
+  ok("2.18 search narrows by term on the definer view (no base access, no new fields)",
+    searchRows.length === 1 && searchRows[0].slug === "aurora-runner", JSON.stringify(searchRows));
+  const attrKnit = await unit("aura_public", null, () =>
+    q(`select count(*)::int as n from aura.public_products p
+        where exists (select 1 from aura.public_product_attributes a
+                       where a.product_slug = p.slug and a.key = 'upper-material' and a.value = 'knit')`)
+  );
+  const attrLeather = await unit("aura_public", null, () =>
+    q(`select count(*)::int as n from aura.public_products p
+        where exists (select 1 from aura.public_product_attributes a
+                       where a.product_slug = p.slug and a.key = 'upper-material' and a.value = 'leather')`)
+  );
+  ok("2.19 attribute-value filter narrows via the public attributes view (knit=3, leather=0)",
+    attrKnit[0].n === 3 && attrLeather[0].n === 0, `knit=${attrKnit[0].n} leather=${attrLeather[0].n}`);
+  const titleSort = await unit("aura_public", null, () =>
+    q(`select title from aura.public_products order by title asc, slug asc`)
+  );
+  ok("2.20 selectable title sort orders correctly (title asc, slug tie-break)",
+    JSON.stringify(titleSort.map(r => r.title)) ===
+    JSON.stringify(["Aurora Runner", "Borealis Classic", "Borealis Runner"]),
+    JSON.stringify(titleSort.map(r => r.title)));
+
+  // == Group 2D: defense-in-depth — simulate an accidental base-table grant ====
+  // (owner item 4). With base SELECT temporarily granted to aura_public, the
+  // public policies must STILL hide suspended and unapproved sellers across
+  // products and every child table. Grants are revoked afterwards (finally).
+  const didTables = ["products", "seller_profiles", "product_variants", "product_media", "product_attribute_values"];
+  await q(`grant select on ${didTables.map(t => `aura.${t}`).join(", ")} to aura_public`);
+  try {
+    await unit("aura_app", ids.adminP, () =>
+      q(`update aura.seller_profiles set suspended_at = now(), suspension_note = 'did test' where id = $1`, [sellerA]));
+    const n = async (sql: string, params: unknown[]) =>
+      (await unit("aura_public", null, () => q(sql, params)))[0].n;
+    ok("2.21 defense-in-depth: suspended seller's products hidden even with a base grant",
+      (await n(`select count(*)::int as n from aura.products where seller_profile_id = $1`, [sellerA])) === 0);
+    ok("2.22 defense-in-depth: suspended seller's variants hidden",
+      (await n(`select count(*)::int as n from aura.product_variants where product_id = $1`, [pA])) === 0);
+    ok("2.23 defense-in-depth: suspended seller's media hidden",
+      (await n(`select count(*)::int as n from aura.product_media where product_id = $1`, [pA])) === 0);
+    ok("2.24 defense-in-depth: suspended seller's attributes hidden",
+      (await n(`select count(*)::int as n from aura.product_attribute_values where product_id = $1`, [pA])) === 0);
+    await unit("aura_app", ids.adminP, () =>
+      q(`update aura.seller_profiles set suspended_at = null where id = $1`, [sellerA]));
+    ok("2.25 defense-in-depth: unapproved seller's products hidden even with a base grant",
+      (await n(`select count(*)::int as n from aura.products where seller_profile_id = $1`, [sellerC])) === 0);
+    ok("2.26 defense-in-depth: unapproved seller's variants hidden",
+      (await n(`select count(*)::int as n from aura.product_variants where product_id = $1`, [pC])) === 0);
+    ok("2.27 defense-in-depth: unapproved seller's media hidden",
+      (await n(`select count(*)::int as n from aura.product_media where product_id = $1`, [pC])) === 0);
+    ok("2.28 defense-in-depth: unapproved seller's attributes hidden",
+      (await n(`select count(*)::int as n from aura.product_attribute_values where product_id = $1`, [pC])) === 0);
+  } finally {
+    await q(`revoke select on ${didTables.map(t => `aura.${t}`).join(", ")} from aura_public`);
+  }
+  let zeroAgain = true;
+  for (const t of didTables)
+    if ((await q(`select has_table_privilege('aura_public', 'aura.${t}', 'SELECT') as ok`))[0].ok) zeroAgain = false;
+  ok("2.29 base grants revoked; aura_public back to zero base-table SELECT", zeroAgain);
 
   // == Group 3: suspension + confidential note (D-03) ==========================
   await expectError("3.1 four-eyes: dual-role admin cannot suspend their own org", "review_separation_required", () =>
@@ -547,8 +677,8 @@ async function main() {
     JSON.stringify(restoredPublic.map(r => r.slug)) ===
     JSON.stringify(["aurora-runner", "aurora-runner", "b-runner", "pending-shoe"]),
     JSON.stringify(restoredPublic));
-  ok("3.23 seller.restored audit event exists",
-    (await q(`select count(*)::int as n from aura.audit_events where entity_id = $1 and action = 'seller.restored'`, [sellerA]))[0].n === 1);
+  ok("3.23 seller.restored audit event exists (>=1; the item-4 defense-in-depth block also restores sellerA)",
+    (await q(`select count(*)::int as n from aura.audit_events where entity_id = $1 and action = 'seller.restored'`, [sellerA]))[0].n >= 1);
   ok("3.24 approved_revision_id unchanged through suspend/restore",
     (await q(`select approved_revision_id from aura.products where id = $1`, [pA]))[0].approved_revision_id === revA);
   const noteAfterRestore = await unit("aura_app", ids.ownerA, () =>

@@ -69,7 +69,7 @@ Never force-push, rewrite master history, deploy or merge without authorization.
 - No PAN/expiry/CVC in app input, state, persistence, logs, tests or contracts. Hosted checkout only; redirects never confirm payment.
 - No secret in Git, browser bundles, `VITE_*` variables, images, error strings or logs. No service-role key in the runtime. Server-only credentials.
 - The browser presents a session credential, never an authoritative identity/tenant/role. Identity is bound transaction-locally by trusted backend code only; no session-persistent identity, no statement pooling.
-- Default deny: least-privilege roles, RLS on tenant tables, column allowlists for public exposure, no `BYPASSRLS`/superuser for request processing, security-definer functions pin `search_path` and revoke PUBLIC EXECUTE.
+- Default deny: least-privilege roles, RLS on tenant tables, column allowlists for public exposure, no `BYPASSRLS`/superuser for request processing, security-definer functions pin `search_path` and revoke PUBLIC EXECUTE; security-definer **views** are owned by a non-superuser NOBYPASSRLS role that owns the base tables they read (ownership, not privilege escalation, is how they reach base rows), with catalog-level assertions for owner, owner attributes, security mode and effective grants.
 - Four-eyes separation of duties for platform decisions; append-only audit; products archived, never deleted.
 - Fail closed: missing config → unavailable, never a fabricated success or a fallback to a more privileged path.
 - Historical checkout/credential incidents are a separate owner-led track: do not inspect, migrate or delete historical browser records; do not claim remediation beyond current source.

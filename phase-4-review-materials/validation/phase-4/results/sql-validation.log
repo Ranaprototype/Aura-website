@@ -19,6 +19,10 @@ PASS  1.12 every helper-calling policy is scoped TO aura_app
 PASS  1.13 reference-data policy categories_read remains PUBLIC (definition unchanged)
 PASS  1.14 public_products is a SECURITY DEFINER view (not security_invoker)
 PASS  1.15 aura_app column grants hide suspension_note but keep status/overlay columns (D-03)
+PASS  1.16 all five definer views are owned by the catalog owner (not a privileged migration role)
+PASS  1.17 catalog owner is nologin/nosuperuser/nobypassrls and owns every base table the views read
+PASS  1.18 all five public views are SECURITY DEFINER (security_invoker not set)
+PASS  1.19 effective grants: aura_public SELECT on the five views only, zero base-table SELECT
 PASS  2.1 public projection shows exactly the three published products (pre-0009 duplicate slug twice)
 PASS  2.2 public media is image-only (reference kind hidden)
 PASS  2.3 variant view allowlist (no id, no sku; keyed by product_slug)
@@ -34,8 +38,20 @@ PASS  2.12 public INSERT denied
 PASS  2.13 public UPDATE denied
 PASS  2.14 public DELETE denied
 PASS  2.15 aura_app member behaviour unchanged (own drafts visible, cross-tenant denied)
-PASS  2.16 exact API list query runs as aura_public (no seller, no internal ids, slug keyset)
+PASS  2.16 exact API list query (search/filter/sort capable) runs as aura_public; slug keyset, no ids/seller
 PASS  2.17 category filter narrows correctly (apparel has no published products)
+PASS  2.18 search narrows by term on the definer view (no base access, no new fields)
+PASS  2.19 attribute-value filter narrows via the public attributes view (knit=3, leather=0)
+PASS  2.20 selectable title sort orders correctly (title asc, slug tie-break)
+PASS  2.21 defense-in-depth: suspended seller's products hidden even with a base grant
+PASS  2.22 defense-in-depth: suspended seller's variants hidden
+PASS  2.23 defense-in-depth: suspended seller's media hidden
+PASS  2.24 defense-in-depth: suspended seller's attributes hidden
+PASS  2.25 defense-in-depth: unapproved seller's products hidden even with a base grant
+PASS  2.26 defense-in-depth: unapproved seller's variants hidden
+PASS  2.27 defense-in-depth: unapproved seller's media hidden
+PASS  2.28 defense-in-depth: unapproved seller's attributes hidden
+PASS  2.29 base grants revoked; aura_public back to zero base-table SELECT
 PASS  3.1 four-eyes: dual-role admin cannot suspend their own org
 PASS  3.2 suspension preserves status and product approval state
 PASS  3.3 suspended seller's products leave the public projection immediately
@@ -58,7 +74,7 @@ PASS  3.19 platform admin can still decide a submitted product while seller susp
 PASS  3.20 suspension must be atomic (no mixed content edit)
 PASS  3.21 restoration clears the overlay and preserves prior state
 PASS  3.22 restored products reappear with the same approval (plus the admin-approved one)
-PASS  3.23 seller.restored audit event exists
+PASS  3.23 seller.restored audit event exists (>=1; the item-4 defense-in-depth block also restores sellerA)
 PASS  3.24 approved_revision_id unchanged through suspend/restore
 PASS  3.25 accessor returns null after restoration (note cleared, overlay reversible)
 PASS  4.1 backfill without trigger handling fails (identity_required)
@@ -84,4 +100,4 @@ PASS  5.3 app role cannot touch public rate limits (two-way isolation)
 PASS  6.1 proposed migrations replay twice on a fresh engine without error
 PASS  6.2 engine recorded for the evidence log
 
-76 passed, 0 failed
+92 passed, 0 failed

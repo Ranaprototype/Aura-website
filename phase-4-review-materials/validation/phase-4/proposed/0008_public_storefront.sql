@@ -4,8 +4,12 @@
 -- migration ledger. It is executed against disposable PGlite by
 -- validation/phase-4/validate.ts to prove the design in AURA-PHASE-4-PLAN.md.
 -- Additive: 0001-0007 are not edited. Requires PostgreSQL >= 15
--- (security_invoker views). Runs as the migration role that OWNS the aura
--- tables (never as a request-processing role).
+-- (security_invoker views). Runs as a migration role with CREATEROLE that is
+-- superuser OR a member of the catalog table owner (never a request-processing
+-- login). The public discovery views are SECURITY DEFINER and are explicitly
+-- (re)assigned in §8 to the catalog table owner, which MUST be NON-superuser and
+-- NOBYPASSRLS; the views read base tables via that ownership (owner RLS
+-- exemption), and aura_public has zero base-table grants.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -408,34 +412,51 @@ create policy seller_profiles_public_select on aura.seller_profiles
   for select to aura_public
   using (status = 'approved' and suspended_at is null);
 
+-- D-04 correction (owner, 2026-11-27 review): these defense-in-depth policies
+-- must enforce the FULL publication predicate — approved product + not pending
+-- + approved seller + not suspended — so that if a base-table SELECT grant to
+-- aura_public is ever added by mistake, the rows still cannot leak. They mirror
+-- the definer-view WHERE exactly. (aura_public has zero base grants today, so
+-- these are never evaluated on the live public path; they are a safety net.)
 drop policy if exists products_public_select on aura.products;
 create policy products_public_select on aura.products
   for select to aura_public
-  using (status = 'approved' and pending_changes = false);
+  using (
+    status = 'approved' and pending_changes = false
+    and exists (
+      select 1 from aura.seller_profiles s
+      where s.id = products.seller_profile_id
+        and s.status = 'approved' and s.suspended_at is null));
 
 drop policy if exists product_variants_public_select on aura.product_variants;
 create policy product_variants_public_select on aura.product_variants
   for select to aura_public
   using (exists (
     select 1 from aura.products p
+    join aura.seller_profiles s on s.id = p.seller_profile_id
     where p.id = product_variants.product_id
-      and p.status = 'approved' and p.pending_changes = false));
+      and p.status = 'approved' and p.pending_changes = false
+      and s.status = 'approved' and s.suspended_at is null));
 
 drop policy if exists product_media_public_select on aura.product_media;
 create policy product_media_public_select on aura.product_media
   for select to aura_public
   using (exists (
     select 1 from aura.products p
+    join aura.seller_profiles s on s.id = p.seller_profile_id
     where p.id = product_media.product_id
-      and p.status = 'approved' and p.pending_changes = false));
+      and p.status = 'approved' and p.pending_changes = false
+      and s.status = 'approved' and s.suspended_at is null));
 
 drop policy if exists product_attribute_values_public_select on aura.product_attribute_values;
 create policy product_attribute_values_public_select on aura.product_attribute_values
   for select to aura_public
   using (exists (
     select 1 from aura.products p
+    join aura.seller_profiles s on s.id = p.seller_profile_id
     where p.id = product_attribute_values.product_id
-      and p.status = 'approved' and p.pending_changes = false));
+      and p.status = 'approved' and p.pending_changes = false
+      and s.status = 'approved' and s.suspended_at is null));
 
 -- ---------------------------------------------------------------------------
 -- 4. Public projections — SECURITY DEFINER VIEWS, minimal discovery columns.
@@ -582,8 +603,10 @@ create policy slug_redirects_public_select on aura.slug_redirects
   for select to aura_public
   using (exists (
     select 1 from aura.products p
+    join aura.seller_profiles s on s.id = p.seller_profile_id
     where p.id = slug_redirects.product_id
-      and p.status = 'approved' and p.pending_changes = false));
+      and p.status = 'approved' and p.pending_changes = false
+      and s.status = 'approved' and s.suspended_at is null));
 
 revoke all on aura.slug_redirects from public;
 grant select on aura.slug_redirects to aura_app;
@@ -602,3 +625,41 @@ create or replace view aura.public_slug_redirects as
      and s.status = 'approved' and s.suspended_at is null;
 
 grant select on aura.public_slug_redirects to aura_public;
+
+-- ---------------------------------------------------------------------------
+-- 8. Explicit SECURITY DEFINER ownership (owner correction, 2026-11-27 review).
+--    A definer view reads base tables with the privileges of its OWNER. That
+--    owner MUST be the catalog table owner — a NON-superuser, NOBYPASSRLS role.
+--    PostgreSQL exempts a table's owner from that table's RLS unless FORCE ROW
+--    LEVEL SECURITY is set (the aura tables use ENABLE, not FORCE), so the views
+--    read base rows via OWNERSHIP — not via superuser/BYPASSRLS, and not via any
+--    grant to aura_public. The view WHERE clause is the publication boundary;
+--    aura_public holds SELECT on the views only (zero base-table grants).
+--    Here we (re)assign the five definer views and slug_redirects to whoever
+--    owns aura.products, so view ownership always tracks catalog ownership and
+--    is never left with an implicit/privileged migration role. Requirements
+--    (asserted in validation and at the deployment gate):
+--      * the catalog owner is NON-superuser, NOBYPASSRLS, and (recommended)
+--        NOLOGIN; it owns every base table the views read;
+--      * the migration role running 0008 is superuser OR a member of the catalog
+--        owner (needed to reassign ownership); it is never a request-processing
+--        login;
+--      * storefront_products stays security_invoker (caller privileges) and is
+--        NOT reassigned — it is the aura_app projection, not a public boundary.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_owner text;
+begin
+  select r.rolname into v_owner
+    from pg_class c join pg_roles r on r.oid = c.relowner
+   where c.oid = 'aura.products'::regclass;
+
+  execute format('alter table aura.slug_redirects owner to %I', v_owner);
+  execute format('alter view aura.public_products owner to %I', v_owner);
+  execute format('alter view aura.public_product_variants owner to %I', v_owner);
+  execute format('alter view aura.public_product_media owner to %I', v_owner);
+  execute format('alter view aura.public_product_attributes owner to %I', v_owner);
+  execute format('alter view aura.public_slug_redirects owner to %I', v_owner);
+end
+$$;

@@ -1,6 +1,6 @@
 # AURA Phase 4 Technical Plan — Public Marketplace Storefront, Global Slugs, Seller Suspension
 
-**Status:** planning and technical preparation complete · **implementation NOT started** · awaiting owner review of D-01…D-04 and authorization.
+**Status:** planning and technical preparation complete · **implementation NOT started** · D-01–D-04 owner-directed (2026-11-27); second-review corrections applied 2026-11-27 (discovery search/filter/sort restored; cursor fixed + 16 tests; definer ownership explicit; defense-in-depth policies completed) · awaiting owner authorization (D-22) and the discovery UX choices (D-23/D-24/D-25).
 **Baseline:** `master` = `b12a5596bf3b454b844c5d3b5bc83784247e300f` (Phases 0–3 merged, PRs #1–#4), verified 2026-11-27.
 **Provenance note:** no prior `AURA-PHASE-4-PLAN.md` exists in any commit, branch or PR (`git log --all -- AURA-PHASE-4-PLAN.md` is empty; `git ls-remote` shows only `master` and the four merged phase branches). This document is therefore the authoritative Phase 4 plan, reconstructed from the owner's 20-issue review list and the verified repository state. It does not pretend to edit a previous file.
 **Controlling documents:** [AURA-MASTER-SPECIFICATION.md](AURA-MASTER-SPECIFICATION.md) (product + decision register) · [AURA-COMPLETE-ROADMAP.md](AURA-COMPLETE-ROADMAP.md) (scope) · [AURA-AGENT-OPERATING-RULES.md](AURA-AGENT-OPERATING-RULES.md) (process).
@@ -12,13 +12,14 @@
 **In scope (read-only public marketplace + moderation tooling):**
 
 - Anonymous public catalogue: product list and product detail (variants/media/attributes), minimum discovery fields only. **No public seller profile pages in Phase 4** (D-01/D-21).
+- **Product discovery: search, filtering and sorting** (owner-restored, 2026-11-27 review). Text search over the public title/summary; category + attribute-value filtering; selectable sort order. These query only the existing D-02 allowlist — **no new public fields**. User-facing menus/semantics are registered separately (D-23/D-24/D-25).
 - Globally unique product slugs with a deterministic collision migration, redirect storage/resolution and a reviewed rollback.
 - Seller suspension/restoration: state-preserving, four-eyes, audited, with immediate de-publication.
 - A dedicated least-privilege anonymous database role and connection pool.
 - Public rate limiting isolated from auth rate limits; signed cursor pagination; trusted-proxy configuration; uniform public 404; `no-store` consistency fix.
 - Additive HOLO frontend pages under a new namespace; suspension controls on the existing admin review screen.
 
-**Explicit exclusions:** prices, currency, stock, cart/checkout for marketplace items, payments, refunds, shipping, manufacturing, search/indexing, media uploads/CDN, seller slug renames (D-13), identity-level suspension, public caching/CDN (D-05), any change to preview configurators, cart, wishlist or containment denials.
+**Explicit exclusions:** prices, currency, stock, cart/checkout for marketplace items, payments, refunds, shipping, manufacturing, **semantic/vector search and dedicated search-index infrastructure** (basic discovery search IS in scope; a GIN/text index is a measured follow-up, not a Phase 4 commitment), media uploads/CDN, seller slug renames (D-13), identity-level suspension, public caching/CDN (D-05), any change to preview configurators, cart, wishlist or containment denials.
 
 **Owner gates before implementation:** D-01 (URL scheme), D-02 (public field allowlist), D-03 (suspension semantics), D-04 (global slug policy). All four have validated recommended answers in the register; implementation is blocked until the owner answers.
 
@@ -58,7 +59,7 @@ Browser (admin) ── POST /api/v1/admin/sellers/:orgId/suspend|restore ──�
 
 | Route | Behaviour |
 | --- | --- |
-| `GET /api/v1/storefront/products?limit&cursor&category` | Published products, keyset pagination `(approved_at DESC, slug DESC)`, default limit 24, max 60; optional `category` (category slug) filter; returns `{items, nextCursor}`. Each item: `slug, title, summary, category {slug, name}, approvedAt, heroImage` (first `kind='image'` media url or null). **No internal ids, no seller fields** (D-02). |
+| `GET /api/v1/storefront/products?limit&cursor&category&q&attr&sort` | Published products with **search, filtering, sorting**. `q` (optional, 1–100 chars): word search over title+summary (`to_tsvector('simple', …) @@ websearch_to_tsquery('simple', q)`). `category` (optional slug). `attr` (repeatable `key:value`): attribute-value filter via `public_product_attributes`. `sort`: `newest` (default, `approved_at DESC, slug DESC`) or `title` (`title ASC, slug ASC`). Keyset pagination matches the sort; default limit 24, max 60; returns `{items, nextCursor}`. Each item: `slug, title, summary, category {slug, name}, approvedAt, heroImage`. Search/filter/sort use **only the D-02 allowlist — no new fields, no internal ids, no seller fields**. User-facing menus/semantics: D-23/D-24/D-25. |
 | `GET /api/v1/storefront/products/:slug` | Published product detail: `slug, title, summary, description, approvedAt, category {slug, name}` + variants (`title, size, colour, material, position`) + media (images only: `kind, url, altText, position`) + attributes (`key, label, value`). **No internal ids, no seller identity/disclosure** (D-02). If the slug is a redirect of a published product, returns `200` with `canonicalSlug` and `redirectedFrom` (client replaces the URL). Every other case → uniform `404 {"error":"not_found"}`. |
 | `POST /api/v1/admin/sellers/:orgId/suspend` | Platform admin, four-eyes, body `{note}` (1–1000 chars, required). Sets the overlay; audited `seller.suspended` (detail records `noteRecorded`, not the note text). |
 | `POST /api/v1/admin/sellers/:orgId/restore` | Platform admin, four-eyes. Clears the overlay; audited `seller.restored`. |
@@ -70,19 +71,35 @@ Errors: `400 invalid_request` (bad filter/limit), `400 invalid_cursor` (tampered
 
 ### 3.2 Public read SQL (executed against the views in validation)
 
-List (keyset; `$2/$3` = cursor key omitted on first page, `$4` = limit):
+List (`newest` sort shown; `$1`=category, `$2`=search term, `$3/$4`=attribute key/value,
+`$5/$6`=cursor key omitted on first page, `$7`=limit). Runs as `aura_public` on the
+SECURITY DEFINER views; search/filter/sort touch only allowlisted columns — no base
+access, no internal ids, no seller fields:
 
 ```sql
--- Runs as aura_public on the SECURITY DEFINER view; no internal ids, no seller.
 select p.slug, p.title, p.summary, p.approved_at, p.category_slug, p.category_name,
        (select m.url from aura.public_product_media m
          where m.product_slug = p.slug order by m.position limit 1) as hero_image
   from aura.public_products p
  where ($1::text is null or p.category_slug = $1)
-   and ($2::timestamptz is null or (p.approved_at, p.slug) < ($2, $3))
+   and ($2::text is null
+        or to_tsvector('simple', p.title || ' ' || coalesce(p.summary, ''))
+           @@ websearch_to_tsquery('simple', $2))
+   and ($3::text is null or exists (
+         select 1 from aura.public_product_attributes a
+          where a.product_slug = p.slug and a.key = $3 and a.value = $4))
+   and ($5::timestamptz is null or (p.approved_at, p.slug) < ($5, $6))
  order by p.approved_at desc, p.slug desc
- limit $4;
+ limit $7;
 ```
+
+For `sort=title`, the keyset predicate becomes `(p.title, p.slug) > ($5, $6)` and the
+order `p.title asc, p.slug asc`; the cursor key is `[title, slug]` (see §3.3). Search and
+attribute filters are identical across sorts. At current catalogue scale a sequential
+scan is acceptable; a GIN index on the search expression is a **measured** follow-up
+(write-amplification reviewed first, per the database architecture), not a Phase 4
+commitment. Executed: `validate.ts` 2.16 (list), 2.18 (search), 2.19 (attribute filter),
+2.20 (title sort); `cursor.test.ts` B1–B3 (pagination coverage per sort/search).
 
 Detail resolution (live first, then redirect — T-05):
 
@@ -101,7 +118,12 @@ While the publication predicate holds, working-copy child rows are guaranteed id
 
 ### 3.3 Signed cursor (T-07)
 
-`cursor = base64url(payload) + "." + base64url(HMAC-SHA256(secret, payload))`, payload = `{"v":1,"r":"products","f":<sha256(filters) truncated 16 hex>,"k":[approvedAtISO,id],"l":limit}`. Verification: recompute HMAC with `crypto.timingSafeEqual`; reject unless `v/r/f/l` match the current request. Tamper/mismatch → `400 invalid_cursor`. Secret: `PUBLIC_CURSOR_SECRET` (≥32 chars) **required in production** when the public surface is enabled; dev/test generate an ephemeral per-process secret (cursors do not survive restarts there — documented). No new dependency (`node:crypto`).
+`cursor = base64url(payload) + "." + base64url(HMAC-SHA256(secret, payloadB64))`, payload = `{"v":1,"b":<sha256(binding) hex>,"k":[key0,key1]}`.
+
+- **Keyset matches the actual ordering (owner item 2 fix):** `newest` → `k=[approvedAt, slug]` (ORDER BY `approved_at DESC, slug DESC`); `title` → `k=[title, slug]` (ORDER BY `title ASC, slug ASC`). The previous `[approvedAtISO, id]` payload was inconsistent with the slug-keyed query and is removed; **no internal id is ever placed in a public cursor**. `approvedAt` is carried at **full timestamp precision** (`approved_at::text`, microseconds) so the keyset never skips/repeats rows due to millisecond truncation.
+- **Binding (owner item 2):** `b = sha256(canonical({route, q, category, attr(sorted), sort, limit}))`. The cursor is bound to route + search term + every filter + sort order + page limit. Verification recomputes the HMAC (`crypto.timingSafeEqual`) **and** the binding hash; a valid signature under a different binding is still rejected. Tamper/mismatch/malformed/wrong-version → `400 invalid_cursor`.
+- Secret: `PUBLIC_CURSOR_SECRET` (≥32 chars) **required in production** when the public surface is enabled; dev/test use an ephemeral per-process secret (cursors do not survive restarts there — documented). No new dependency (`node:crypto`).
+- **Reference implementation + executable tests:** `validation/phase-4/cursor.ts` (the exact contract) and `validation/phase-4/cursor.test.ts` (16 tests: round-trip, tampered payload/signature, wrong secret, mismatched route/search/category/attribute/sort/limit, attr-order independence, malformed payloads, and PGlite pagination with no duplicates/omissions for newest, title and search). Log: `validation/phase-4/results/cursor-tests.log`.
 
 ### 3.4 Public rate limiting (T-06) and trusted proxy (T-08)
 
@@ -121,7 +143,7 @@ While the publication predicate holds, working-copy child rows are guaranteed id
 
 ## 4. The 20 review issues — problem, solution, safety, changes, tests
 
-Legend: **Executed** = run during this planning task on disposable PGlite 0.5.16 / PostgreSQL 18.6 (`validation/phase-4/validate.ts`, 76 checks) or the real Express harness (`probe-app.ts`, 9 checks); logs in `validation/phase-4/results/`. **Proposed** = implementation-phase tests, not yet written.
+Legend: **Executed** = run during this planning task on disposable PGlite 0.5.16 / PostgreSQL 18.6 (`validation/phase-4/validate.ts`, **92 checks**; `validation/phase-4/cursor.test.ts`, **16 checks**) or the real Express harness (`probe-app.ts`, 9 checks); logs in `validation/phase-4/results/`. **Proposed** = implementation-phase tests, not yet written.
 
 ### 4.1 PostgreSQL function EXECUTE privileges
 - **Problem:** PostgreSQL grants `EXECUTE` to `PUBLIC` on every new function by default. A public role that can execute identity helpers (`is_active_member`, `is_platform_admin`) plus a caller-settable `aura.principal_id` GUC becomes a membership/privilege oracle. Existing `touch_updated_at()` still had PUBLIC EXECUTE.
@@ -133,13 +155,16 @@ Legend: **Executed** = run during this planning task on disposable PGlite 0.5.16
 - **Problem:** a public detail page needs variants/media/attributes, but base tables carry private columns (SKU, `created_by`, reference media, seller `legal_name`/`business_email`/review notes). A view alone is not a boundary if the role can also read base columns.
 - **Solution (D-02 owner-directed):** `aura_public` gets **zero base-table SELECT grants**. Five **SECURITY DEFINER** discovery views (`public_products`, `public_product_variants`, `public_product_media` [images only], `public_product_attributes`, `public_slug_redirects`) are owner-owned (no `security_invoker`), fully schema-qualified, call no functions, and select only slug-keyed discovery columns; the view `WHERE` joins the published parent + approved, non-suspended seller. Internal ids are used only inside joins and are never selectable. The Phase 3 `storefront_products` keeps `security_invoker` + its column list for `aura_app` (adds the suspension filter) and is not granted to `aura_public`. Role-targeted base RLS policies remain as defense-in-depth.
 - **Why safe:** a direct base-table query as `aura_public` is denied outright (no grant); `SELECT *` on a base table fails; the only readable objects are the discovery views, which expose no internal identifier or seller field. `security_invoker` + column grants were rejected because every join/predicate column would have to be granted and would then be directly queryable.
-- **Changes:** DB (0008 §2–4); API serializers read only views. **Tests:** Executed 1.3–1.5, 1.14, 2.1–2.9, 2.12–2.14. Proposed: API contract tests asserting response field sets equal D-02; RLS suite for child visibility under draft/submitted/archived/pending/suspended parents.
+- **Search/filter/sort (owner item 1):** applied as predicates/ORDER BY on the definer views (search via `to_tsvector`/`websearch_to_tsquery` on title+summary; attribute filter via `public_product_attributes`; selectable `newest`/`title` sort). They expose **no new columns** and need **no base grant** — the D-02 allowlist is unchanged.
+- **Changes:** DB (0008 §2–4); API serializers read only views. **Tests:** Executed 1.3–1.5, 1.14, 2.1–2.9, 2.12–2.14, 2.16–2.20 (list/search/attribute/sort). Proposed: API contract tests asserting response field sets equal D-02; RLS suite for child visibility under draft/submitted/archived/pending/suspended parents.
 
 ### 4.3 Security-definer ownership and search_path
 - **Problem:** security-definer functions run as their owner; a superuser/bypassrls owner or an unpinned `search_path` turns them into escalation paths.
-- **Solution:** Phase 4 adds five SECURITY DEFINER **views** (owner-owned, fully schema-qualified, call no functions — no `search_path` execution hazard) and **one** security-definer **function**, `aura.seller_suspension_note(uuid)`, with pinned `search_path=pg_catalog, aura`, PUBLIC revoked, granted to `aura_app` only, owned by the migration owner; it authorizes the caller via `is_active_member(org, {owner,admin})` or `is_platform_admin()`. Existing definers (`is_active_member`, `is_platform_admin`, `build_product_snapshot`, org provisioning) keep pinned `search_path` and PUBLIC revoked. Production requirement: migration/login roles are non-superuser and the view/function owner owns the `aura` tables; target-side check of `prosecdef`, `proconfig`, `proowner`, view ownership and effective grants.
+- **Solution (owner item 3 — explicit ownership):** Phase 4 adds five SECURITY DEFINER **views** and **one** security-definer **function** (`aura.seller_suspension_note(uuid)`, pinned `search_path=pg_catalog, aura`, PUBLIC revoked, `aura_app`-only, role-checked). **0008 §8 explicitly (re)assigns the five definer views and `slug_redirects` to the catalog table owner** (the role that owns `aura.products`), so view ownership always tracks catalog ownership and is never left with an implicit/privileged migration role.
+- **Permitted owner + privilege requirements:** the view owner MUST be the catalog table owner — a **NON-superuser, NOBYPASSRLS** role (recommended NOLOGIN) that **owns every base table the views read** and has CREATE on schema `aura`. The migration role running 0008 has CREATEROLE and is superuser **or** a member of the catalog owner (needed to reassign); it is never a request-processing login.
+- **How the views read base tables (no undocumented privileged owner):** PostgreSQL exempts a table's **owner** from that table's RLS unless `FORCE ROW LEVEL SECURITY` is set (the aura tables use `ENABLE`, not `FORCE`). The definer views run as the catalog owner and read base rows via **ownership** — not via superuser/BYPASSRLS and not via any grant to `aura_public`. The view `WHERE` is the publication boundary; `aura_public` holds SELECT on the views only (zero base grants). `storefront_products` stays `security_invoker` (caller privileges) and is NOT reassigned.
 - **Why safe:** the public path reads only the discovery views (no function execution); the note accessor is `aura_app`-only and role-checked; authenticated paths keep the Phase 2/3 contract already tested.
-- **Changes:** DB (0008); deployment checklist (§6.4). **Tests:** Executed 1.7/1.11 (public cannot execute), 1.14 (definer view), 1.15 (accessor grant), 3.7–3.10 (accessor authorization). Proposed: extend `tests/migrations.test.ts` to assert every definer function has pinned `search_path`, PUBLIC revoked, and owner ∉ {`aura_app`,`aura_public`}; target-side metadata comparison at G1.
+- **Changes:** DB (0008 §8); deployment checklist (§6.4). **Tests:** Executed 1.7/1.11 (public cannot execute), 1.14/1.18 (definer mode), 1.15 (accessor grant), **1.16 (view ownership = catalog owner), 1.17 (owner nologin/nosuperuser/nobypassrls + owns base tables), 1.19 (effective grants: views only)**, 3.7–3.10 (accessor authorization). Proposed: `tests/migrations.test.ts` catalog assertions for view owner + owner attributes + security mode + effective grants; target-side metadata comparison at G1.
 
 ### 4.4 Reader-role permissions and role inheritance
 - **Problem (proven by executed validation):** Phase 2/3 member/admin policies were created **without `TO`**, so they target every role and call `is_active_member()`/`is_platform_admin()`. A restricted public role reading through a `security_invoker` view fails with `permission denied for function is_active_member` — the first validation run crashed exactly here. Granting helper EXECUTE to the public role would create an oracle (4.1). Also, `aura_app` is `NOINHERIT`; it matters that a LOGIN member of a group still inherits the group's grants and matches `TO group` policies.
@@ -197,9 +222,9 @@ Legend: **Executed** = run during this planning task on disposable PGlite 0.5.16
 
 ### 4.13 Signed cursor integrity
 - **Problem:** opaque cursors that encode sort keys/filters can be tampered with to skip scoping or probe other collections.
-- **Solution:** HMAC-SHA256 signed payload bound to route + filter hash + limit (§3.3); constant-time verification; mismatch → `400 invalid_cursor`. Filters are re-applied server-side regardless; the cursor only carries the keyset position.
+- **Solution (owner item 2):** HMAC-SHA256 signed payload bound to **route + search term + filters + sort order + page limit** (§3.3); the keyset matches the actual query ordering (`[approvedAt, slug]` for newest, `[title, slug]` for title); constant-time verification of signature **and** binding; mismatch → `400 invalid_cursor`. Filters are re-applied server-side regardless; the cursor only carries the keyset position.
 - **Why safe:** tampering is detected; scope is never taken from the client; no new dependency.
-- **Changes:** `storefront/cursor.ts`, config. **Tests:** Proposed: round-trip, tampered signature, wrong-route/filter/limit reuse, expired-secret rotation behaviour. (Design is app-level; no SQL validation applicable.)
+- **Changes:** `storefront/cursor.ts`, config. **Tests:** **Executed** `validation/phase-4/cursor.test.ts` — **16/16 pass** (`results/cursor-tests.log`): round-trip, tampered payload/signature, wrong secret, mismatched route/search/category/attribute/sort/limit, attr-order independence, malformed payloads, and PGlite pagination with no duplicates/omissions for newest/title/search. Proposed: port the same cases into `tests/storefront-cursor.test.ts` against the implementation module; secret-rotation behaviour.
 
 ### 4.14 Trusted proxy and IP handling
 - **Problem:** no `trust proxy` is configured; behind an ingress every client would share the proxy IP (one bucket → mass 429), while blindly trusting `X-Forwarded-For` enables spoofing.
@@ -234,8 +259,9 @@ Legend: **Executed** = run during this planning task on disposable PGlite 0.5.16
 ### 4.19 Cross-tenant isolation
 - **Problem:** the public path must not leak drafts or other tenants' private data; admin suspension must not become a cross-tenant write path.
 - **Solution:** public role sees only published rows through the definer discovery views (zero base grants; the view predicate is the boundary); child views require a published parent; forged `aura.principal_id` has no effect (no helper access). `aura_app` member behaviour is unchanged (own drafts visible, cross-tenant denied). Suspension routes are platform-admin + four-eyes + org-scoped by path, inside the existing transaction contract.
-- **Why safe:** six existing layers remain; the public layer adds zero-base-grants + a definer-view publication predicate, proven by negative tests (direct base reads denied).
-- **Changes:** DB + storefront module. **Tests:** Executed 2.6–2.15, 3.12. Proposed: full public RLS matrix (every lifecycle state × every child table), admin cross-org suspension denial.
+- **Defense-in-depth policies corrected (owner item 4):** the public `products`/child/`slug_redirects` RLS policies now enforce the **full** publication predicate — approved product + not pending + **approved seller + not suspended** — mirroring the view `WHERE`. So if a base-table SELECT grant to `aura_public` is ever added by mistake, suspended/unapproved sellers' rows still cannot leak. (Chosen approach: **strengthen the policies** rather than remove them; they are a safety net, never evaluated on the live zero-grant public path.)
+- **Why safe:** six existing layers remain; the public layer adds zero-base-grants + a definer-view publication predicate + complete defense-in-depth policies, proven by negative tests (direct base reads denied; simulated-grant rows still hidden).
+- **Changes:** DB + storefront module. **Tests:** Executed 2.6–2.15, 3.12, **2.21–2.29 (simulated base grant: suspended + unapproved sellers hidden across products/variants/media/attributes; grants revoked afterward)**. Proposed: full public RLS matrix (every lifecycle state × every child table), admin cross-org suspension denial.
 
 ### 4.20 Existing production PostgreSQL compatibility
 - **Problem:** PGlite is PostgreSQL 18.6; production (e.g. Supabase) may be older; migrations must not require superuser or PG18-only features.
@@ -245,7 +271,7 @@ Legend: **Executed** = run during this planning task on disposable PGlite 0.5.16
 
 ## 5. Frontend plan (HOLO, additive)
 
-- `client/src/pages/MarketplacePage.tsx` — public list: filter chips (category), cursor "load more", hero images, HOLO cards; no price/cart CTA (commerce unavailable wording consistent with containment). No seller filter (D-01).
+- `client/src/pages/MarketplacePage.tsx` — public list: **search input** (`q`), **category filter chips**, **attribute facet chips** (`attr`), **sort selector** (`newest`/`title`), cursor "load more", hero images, HOLO cards; no price/cart CTA (commerce unavailable wording consistent with containment). No seller filter (D-01). The exact search/sort/facet menus follow D-23/D-24/D-25.
 - `client/src/pages/MarketplaceProductPage.tsx` — detail: gallery (images only), variant options (read-only display), attributes; canonical-URL replacement when `redirectedFrom` is present; uniform not-found state reuse (`CommerceStatus`). No seller card / seller identity (D-02).
 - **No `MarketplaceSellerPage` in Phase 4** — public seller storefronts deferred (D-21).
 - `client/src/lib/storefront.ts` — same-origin relative GETs, no credentials needed (cookies tolerated), cursor handling.
@@ -272,18 +298,20 @@ create role aura_public_login login password '<secret>';  grant aura_public to a
 Logins keep default INHERIT (inherit group grants; match `TO group` policies — validated 1.10). Never use `postgres`/service-role for requests.
 
 ### 6.4 Target-side verification checklist (owner gate, G1)
-Migration ledger matches `0001`–`0009`; effective grants incl. PUBLIC/default privileges; `aura` not exposed via PostgREST; direct PostgREST anon/authenticated reads of private tables denied and only approved projections readable; definer owners/search_path; `relrowsecurity` on all tenant tables; non-superuser request logins; negative direct-SQL test as `aura_public_login`.
+Migration ledger matches `0001`–`0009`; effective grants incl. PUBLIC/default privileges (`aura_public`: SELECT on the five discovery views only, zero base-table grants); `aura` not exposed via PostgREST; direct PostgREST anon/authenticated reads of private tables denied and only approved projections readable; **definer view ownership verified in the catalog: the five public views + `slug_redirects` owned by the catalog table owner, owner `rolsuper=false` and `rolbypassrls=false`, owner owns every base table read, no `security_invoker` reloption on the definer views**; definer function owners/search_path pinned; `relrowsecurity` on all tenant tables; non-superuser request logins; negative direct-SQL test as `aura_public_login`.
 
 ## 7. Test plan
 
 ### 7.1 Executed during planning (evidence)
-- `validation/phase-4/validate.ts` — **76/76 pass** on PGlite 0.5.16 / PostgreSQL 18.6 after replaying real `0001`–`0007` + proposed 0008/0009: roles/zero-base-grants/EXECUTE/definer-view (1.1–1.15), anonymous reads & negative paths incl. the exact API list query (2.1–2.17), suspension lifecycle/four-eyes/freeze/restore/note-confidentiality (3.1–3.25), slug backfill/redirects/rollback/drift (4.1–4.14), limiter isolation (5.1–5.3), double replay (6.1–6.2). Log: `validation/phase-4/results/sql-validation.log`.
+- `validation/phase-4/validate.ts` — **92/92 pass** on PGlite 0.5.16 / PostgreSQL 18.6 after replaying real `0001`–`0007` + proposed 0008/0009: roles/zero-base-grants/EXECUTE/definer-view/**ownership** (1.1–1.19), anonymous reads & negative paths incl. the exact API list query + **search/attribute/sort** (2.1–2.20), **defense-in-depth simulated-grant negatives** (2.21–2.29), suspension lifecycle/four-eyes/freeze/restore/note-confidentiality (3.1–3.25), slug backfill/redirects/rollback/drift (4.1–4.14), limiter isolation (5.1–5.3), double replay (6.1–6.2). Log: `validation/phase-4/results/sql-validation.log`.
+- `validation/phase-4/cursor.test.ts` — **16/16 pass** (owner item 2): cursor contract (round-trip, tamper, mismatched route/search/filters/sort/limit, malformed, attr-order independence) + PGlite pagination coverage (no duplicates/omissions) for newest/title/search. Log: `validation/phase-4/results/cursor-tests.log`.
 - `validation/phase-4/probe-app.ts` — **9/9 pass** on the real Express app + disposable DB: no-store defect confirmed (A.3), anonymous GET compatibility (A.2/A.4/A.9), cross-site mutation refusal (A.5), uniform API 404 (A.6/A.7), seller auth requirement (A.8). Log: `validation/phase-4/results/app-probe.log`.
 - Baseline regression: `pnpm check` clean; **18 files / 294 tests pass**; build OK; **browser suite 3/3 pass, 0 fail, 0 skipped** (`validation/phase-4/results/browser-baseline.log`).
 - Two design defects were found by execution and fixed in the proposal: (a) public reads failed on helper-calling PUBLIC policies → `ALTER POLICY … TO aura_app` (T-01); (b) `catalogue_suspension_guard` referenced `old.status` on child tables (SQL AND does not short-circuit) → nested IFs; plus trigger-ordering refinement for atomicity errors.
 
 ### 7.2 Proposed implementation tests (to be written in the phase)
-- `tests/migrations.test.ts` extensions: 0008/0009 replay, catalog assertions (roles, zero base grants, definer views, policy scoping, function EXECUTE, note-accessor grant, indexes, triggers re-enabled).
+- `tests/migrations.test.ts` extensions: 0008/0009 replay, catalog assertions (roles, zero base grants, definer views, **view owner + owner attributes (nosuperuser/nobypassrls) + security mode + effective grants**, policy scoping, function EXECUTE, note-accessor grant, indexes, triggers re-enabled).
+- `tests/storefront-cursor.test.ts`: port the executed `cursor.test.ts` cases against the implementation module (contract + pagination coverage).
 - `tests/storefront-rls.test.ts`: public-role matrix (every lifecycle state × child tables), forged identity, write denials, login inheritance, suspension visibility, redirect visibility.
 - `tests/storefront-api.test.ts`: list/detail contracts, field allowlists, pagination + cursor tamper, uniform 404 matrix, no-store on every response, 429 + Retry-After, 503 unconfigured, admin suspend/restore + four-eyes + CSRF.
 - `tests/storefront-ui.test.tsx` (jsdom): three pages render, not-found states, admin suspension dialog gated on server flag.
@@ -301,7 +329,10 @@ Migration ledger matches `0001`–`0009`; effective grants incl. PUBLIC/default 
 3. Public reads work with zero cookies; private columns/tables/functions unreachable as `aura_public` (negative tests at the DB layer, not only HTTP).
 4. Suspension preserves and restores exact prior state; four-eyes enforced in DB and API for **both suspend and restore**; seller writes frozen while suspended; admin cleanup allowed; decisions audited; **suspension note confidential to authorized owners/admins/platform admins** (members see state, not the note).
 5. Global slugs unique; collision migration deterministic, audited, reversible; redirects resolve live-first; uniform public 404.
-6. `no-store` on every API response; signed cursors tamper-evident; public limiter isolated; trusted-proxy default off.
+6. `no-store` on every API response; signed cursors tamper-evident **and bound to route/search/filters/sort/limit with a sort-consistent keyset** (no duplicates/omissions); public limiter isolated; trusted-proxy default off.
+6a. **Discovery works:** search, category + attribute filtering, and selectable sorting return correct results using only the D-02 allowlist; user-facing menus confirmed via D-23/D-24/D-25.
+6b. **Definer ownership explicit:** the five public views are owned by a non-superuser, NOBYPASSRLS catalog owner that owns the base tables; catalog assertions pass; `aura_public` has zero base grants.
+6c. **Defense-in-depth:** public product/child/redirect policies enforce approved seller + no suspension; simulated-base-grant negative tests hide suspended/unapproved sellers across all child tables.
 7. Preview configurators/cart/wishlist/containment unchanged; full baseline regression (294+) plus new suites green in hosted CI; no skipped/weakened mandatory tests.
 8. Docs consistent; phase report separates executed vs proposed evidence; no production-readiness claim.
 
