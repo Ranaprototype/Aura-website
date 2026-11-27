@@ -243,7 +243,19 @@ These corrections are recorded here so future agents do not re-litigate them. Th
 
 **Status of D-01–D-04:** on 2026-11-27 the owner issued explicit corrections resolving these four decisions (remove public seller storefronts from Phase 4; minimise anonymous discovery data; restrict suspension-note visibility; keep global slugs with predictable legacy behaviour and no seller renames). They are recorded below as **OWNER-DIRECTED** and are reflected in the proposed SQL and validation evidence.
 
-**Status of the second review round (2026-11-27, published-package review):** the owner identified four defects, all now corrected in the proposal and evidence: (1) **product search, filtering and sorting restored to Phase 4 scope** (API contract, frontend plan, query design and acceptance criteria updated; unresolved user-facing choices registered separately as **D-23/D-24/D-25** — recommendations are not decisions); (2) **cursor pagination fixed and tested** — payload keyset now matches the actual ordering (`[approvedAt, slug]` / `[title, slug]`, never an internal id), bound to route+search+filters+sort+limit, 16 executable tests (`cursor.test.ts`); (3) **SECURITY DEFINER ownership made explicit** — 0008 §8 reassigns the views to the non-superuser NOBYPASSRLS catalog table owner, with catalog-level assertions (1.16–1.19); (4) **public defense-in-depth RLS policies completed** — they now enforce approved seller + no suspension, with simulated-grant negative tests across products/variants/media/attributes (2.21–2.29). Evidence: **92/92 SQL + 16/16 cursor + 9/9 app probes; browser baseline 3/3 preserved**. **Implementation approval (D-22) is still withheld**; the Class I gates for Phase 4 are now D-22 plus the discovery UX choices D-23/D-24/D-25. Previously approved requirements are preserved and are **not** re-asked.
+**Status of the second review round (2026-11-27, published-package review):** the owner identified four defects, all now corrected in the proposal and evidence: (1) **product search, filtering and sorting restored to Phase 4 scope** (API contract, frontend plan, query design and acceptance criteria updated; unresolved user-facing choices registered separately as **D-23/D-24/D-25** — recommendations are not decisions); (2) **cursor pagination fixed and tested** — payload keyset now matches the actual ordering (`[approvedAt, slug]` / `[title, slug]`, never an internal id), bound to route+search+filters+sort+limit, 16 executable tests (`cursor.test.ts`); (3) **SECURITY DEFINER ownership made explicit** — 0008 §8 reassigns the views to the non-superuser NOBYPASSRLS catalog table owner, with catalog-level assertions (1.16–1.19); (4) **public defense-in-depth RLS policies completed** — they now enforce approved seller + no suspension, with simulated-grant negative tests across products/variants/media/attributes (2.21–2.29). Evidence at that round: 92/92 SQL + 16/16 cursor + 9/9 app probes; browser baseline 3/3 preserved. **Final-preparation revision (2026-11-27):** added the standalone [database ownership & migration prerequisites runbook](AURA-PHASE-4-DATABASE-OWNERSHIP-PROCEDURE.md), recorded D-23/D-24/D-25 as **proposed defaults awaiting explicit owner confirmation (NOT approved)**, and added executable ownership-procedure proofs (1.20–1.24) → **current evidence 97/97 SQL + 16/16 cursor + 9/9 app probes; browser baseline 3/3 preserved**. **Implementation approval (D-22) is still withheld (OPEN)**; the Class I gates for Phase 4 are D-22 plus confirmation of the discovery UX choices D-23/D-24/D-25. Previously approved requirements are preserved and are **not** re-asked.
+
+### Pending owner confirmations — proposed defaults, NOT approved
+
+The three discovery user-facing choices below are **recorded with proposed defaults and await the owner's explicit confirmation**. They are **not approved** and must not be implemented until confirmed. A recommendation executed in validation is not a decision.
+
+| ID | User-facing choice | Proposed default (awaiting confirmation) | Status |
+| --- | --- | --- | --- |
+| D-23 | Search fields + matching semantics | Word search over **title + summary** (`websearch_to_tsquery('simple')`), 1–100 chars; empty `q` = unfiltered | **OPEN — awaiting owner confirmation, NOT approved** |
+| D-24 | Sort options + default | **`newest` (default)** + **`title` A–Z**; no relevance/price/popularity sort | **OPEN — awaiting owner confirmation, NOT approved** |
+| D-25 | Filter facets | **category** chips + **attribute `key:value`** (`attr`); which attributes become chips TBD (interacts D-15) | **OPEN — awaiting owner confirmation, NOT approved** |
+
+These gate Phase 4 alongside D-22 (implementation go-ahead, also OPEN). The owner makes one go/no-go decision after reviewing this package.
 
 ### Class I — Owner decisions requiring explicit approval
 
@@ -288,20 +300,26 @@ These corrections are recorded here so future agents do not re-litigate them. Th
 - **Why it matters:** The owner has withheld implementation approval pending review of the corrected documents and evidence (second review round corrections applied 2026-11-27).
 - **Gate:** Explicit owner authorization before any implementation, commit, push, PR, merge or deploy.
 
-#### D-23 · Discovery search: fields and semantics — OPEN (user-facing choice, registered not decided)
-- **Question:** Which fields does public search cover, and with what matching semantics? Validated recommendation: case-insensitive word matching over **title + summary** (`to_tsvector('simple', …) @@ websearch_to_tsquery`), 1–100 character queries.
-- **Alternatives / consequences:** adding description/attribute text widens matches but slows queries and can surface odd snippets; prefix/typo-tolerant matching needs trigram infrastructure (deferred with semantic search). Empty/absent `q` = unfiltered list.
-- **Gate:** Confirm with D-22 before implementation; the recommendation is executed in validation (2.18) but is **not** an approved product decision.
+#### D-23 · Discovery search: fields and semantics — OPEN · AWAITING EXPLICIT OWNER CONFIRMATION (NOT APPROVED)
+- **Status:** proposed default recorded below; **awaiting the owner's explicit confirmation. Not approved. Do not implement until confirmed.**
+- **Question:** Which fields does public search cover, and with what matching semantics?
+- **Proposed default (awaiting confirmation):** case-insensitive word matching over **title + summary** (`to_tsvector('simple', …) @@ websearch_to_tsquery('simple', q)`), 1–100 character queries; empty/absent `q` = unfiltered list.
+- **Alternatives / consequences:** adding description/attribute text widens matches but slows queries and can surface odd snippets; prefix/typo-tolerant matching needs trigram infrastructure (deferred with semantic search).
+- **Gate:** Confirm with D-22 before implementation. The proposed default is executed in validation (2.18) as a recommendation only — it is **not** an approved product decision.
 
-#### D-24 · Discovery sort options and default — OPEN (user-facing choice, registered not decided)
-- **Question:** Which sort orders are offered, and which is the default? Validated recommendation: **`newest` (default; approved_at DESC, slug DESC)** and **`title` (A–Z; title ASC, slug ASC)**.
+#### D-24 · Discovery sort options and default — OPEN · AWAITING EXPLICIT OWNER CONFIRMATION (NOT APPROVED)
+- **Status:** proposed default recorded below; **awaiting the owner's explicit confirmation. Not approved. Do not implement until confirmed.**
+- **Question:** Which sort orders are offered, and which is the default?
+- **Proposed default (awaiting confirmation):** **`newest` (default; approved_at DESC, slug DESC)** and **`title` (A–Z; title ASC, slug ASC)**.
 - **Alternatives / consequences:** relevance ranking for searched lists needs a ranking decision and is not proposed; price/popularity sorts are impossible (no price/sales data in Phase 4). Every offered sort needs a matching cursor keyset (implemented for both recommended sorts).
-- **Gate:** Confirm with D-22 before implementation; recommendation executed in validation (2.20, cursor B1/B2), not approved.
+- **Gate:** Confirm with D-22 before implementation. The proposed default is executed in validation (2.20, cursor B1/B2) as a recommendation only — it is **not** an approved product decision.
 
-#### D-25 · Discovery filter facets — OPEN (user-facing choice, registered not decided)
-- **Question:** Which filters are exposed in the UI? Validated recommendation: **category** (slug chips) and **attribute key:value** (repeatable `attr` parameter, e.g. `material:knit`). Which attributes become visible facet chips (all category attributes vs a curated subset) is a product choice.
+#### D-25 · Discovery filter facets — OPEN · AWAITING EXPLICIT OWNER CONFIRMATION (NOT APPROVED)
+- **Status:** proposed default recorded below; **awaiting the owner's explicit confirmation. Not approved. Do not implement until confirmed.**
+- **Question:** Which filters are exposed in the UI?
+- **Proposed default (awaiting confirmation):** **category** (slug chips) and **attribute key:value** (repeatable `attr` parameter, e.g. `material:knit`). Which attributes become visible facet chips (all category attributes vs a curated subset) is a product choice.
 - **Alternatives / consequences:** curated facets need a taxonomy decision (interacts with D-15); no seller filter (D-01); no price/stock filters (no such data). Filters combine with AND and are cursor-bound.
-- **Gate:** Confirm with D-22 before implementation; recommendation executed in validation (2.17/2.19), not approved.
+- **Gate:** Confirm with D-22 before implementation. The proposed default is executed in validation (2.17/2.19) as a recommendation only — it is **not** an approved product decision.
 
 ### Class II — Technical implementation decisions already covered by approved requirements (no approval needed)
 
@@ -349,6 +367,6 @@ These corrections are recorded here so future agents do not re-litigate them. Th
 
 - The repository is the only verified environment. No deployed Supabase/PostgreSQL, provider, CDN or mail relay has been inspected; deployed grants/PostgREST exposure remain an owner gate.
 - PGlite (PostgreSQL 18.6 WASM, single process) validates SQL semantics, not multi-backend concurrency. Contention-sensitive phases (5/6/11) require a real disposable PostgreSQL before acceptance.
-- The Phase 4 plan's SQL was executed on disposable PGlite (**92 checks**, incl. ownership catalog assertions and simulated-grant defense-in-depth negatives), the cursor contract on PGlite + `node:crypto` (**16 checks**), and the app probes on the real Express harness (9 checks); browser baseline 3/3 preserved. Implementation tests are proposed, not yet written.
+- The Phase 4 plan's SQL was executed on disposable PGlite (**97 checks**, incl. ownership catalog assertions, the ownership-procedure executor/membership/RLS/helper proofs 1.20–1.24, and simulated-grant defense-in-depth negatives), the cursor contract on PGlite + `node:crypto` (**16 checks**), and the app probes on the real Express harness (9 checks); browser baseline 3/3 preserved. Implementation tests are proposed, not yet written. The deployment ownership runbook is [AURA-PHASE-4-DATABASE-OWNERSHIP-PROCEDURE.md](AURA-PHASE-4-DATABASE-OWNERSHIP-PROCEDURE.md).
 - Product vision statements derive from the approved architecture set; no functionality has been invented beyond it. Anything not evidenced in code is tagged B/C/D, never A.
 - Historical security incidents remain open and owner-led; this specification neither closes nor investigates them.

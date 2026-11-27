@@ -409,6 +409,74 @@ async function main() {
   ok("1.19 effective grants: aura_public SELECT on the five views only, zero base-table SELECT",
     effViews && !effBase);
 
+  // -- Ownership-procedure proofs (AURA-PHASE-4-DATABASE-OWNERSHIP-PROCEDURE.md).
+  //    These prove the deployment prerequisites the runbook states: executor
+  //    membership enables the §8 reassignment, a non-member is denied, a member
+  //    of the table owner bypasses catalog RLS (ENABLE not FORCE), the note
+  //    accessor's owner needs explicit helper EXECUTE, and a public login
+  //    inherits view-only access. All use scratch objects that are cleaned up.
+  await q(`create role aura_migrator_probe login createrole nosuperuser nobypassrls nocreatedb password 'probe'`);
+  await q(`grant aura_catalog_owner to aura_migrator_probe`);
+  await q(`create view aura._probe_mem as select 1 as x`);
+  await q(`alter view aura._probe_mem owner to aura_migrator_probe`);
+  await unit("aura_migrator_probe", null, () =>
+    q(`alter view aura._probe_mem owner to aura_catalog_owner`));
+  const memOwner = (await q(
+    `select r.rolname as owner from pg_class c join pg_roles r on r.oid=c.relowner
+      where c.relnamespace=(select oid from pg_namespace where nspname='aura') and c.relname='_probe_mem'`))[0].owner;
+  ok("1.20 member executor (CREATEROLE + catalog-owner membership) can reassign a definer view to the catalog owner",
+    memOwner === "aura_catalog_owner", `owner=${memOwner}`);
+  await q(`drop view aura._probe_mem`);
+
+  await q(`create role aura_outsider_probe login createrole nosuperuser nobypassrls nocreatedb password 'probe'`);
+  await q(`create view aura._probe_out as select 1 as x`);
+  await q(`alter view aura._probe_out owner to aura_outsider_probe`);
+  let outsiderDenied = false;
+  try {
+    await unit("aura_outsider_probe", null, () =>
+      q(`alter view aura._probe_out owner to aura_catalog_owner`));
+  } catch { outsiderDenied = true; }
+  ok("1.21 non-member executor is DENIED ownership reassignment to the catalog owner",
+    outsiderDenied);
+  await q(`drop view aura._probe_out`);
+  await q(`drop role aura_outsider_probe`);
+
+  await q(`create table aura._probe_rls (id int)`);
+  await q(`alter table aura._probe_rls owner to aura_catalog_owner`);
+  await q(`alter table aura._probe_rls enable row level security`);
+  await q(`grant select on aura._probe_rls to aura_app`);
+  await q(`create policy _probe_deny on aura._probe_rls for select to aura_app using (false)`);
+  await q(`insert into aura._probe_rls values (1),(2),(3)`);
+  const memberCount = (await unit("aura_migrator_probe", null, () =>
+    q(`select count(*)::int as n from aura._probe_rls`)))[0].n;
+  const appCount = (await unit("aura_app", null, () =>
+    q(`select count(*)::int as n from aura._probe_rls`)))[0].n;
+  ok("1.22 a non-superuser MEMBER of the table owner bypasses catalog RLS (owner exemption); a non-member is filtered",
+    memberCount === 3 && appCount === 0, `member=${memberCount} app=${appCount}`);
+  await q(`drop table aura._probe_rls`);
+  await q(`drop role aura_migrator_probe`);
+
+  const helperBefore = (await q(
+    `select has_function_privilege('aura_catalog_owner','aura.is_active_member(uuid,text[])','EXECUTE') as ok`))[0].ok;
+  await q(`grant execute on function aura.is_active_member(uuid,text[]) to aura_catalog_owner`);
+  await q(`grant execute on function aura.is_platform_admin() to aura_catalog_owner`);
+  const helperAfter = (await q(
+    `select has_function_privilege('aura_catalog_owner','aura.is_active_member(uuid,text[])','EXECUTE') as m,
+            has_function_privilege('aura_catalog_owner','aura.is_platform_admin()','EXECUTE') as p`))[0];
+  await q(`revoke execute on function aura.is_active_member(uuid,text[]) from aura_catalog_owner`);
+  await q(`revoke execute on function aura.is_platform_admin() from aura_catalog_owner`);
+  ok("1.23 note-accessor owner needs explicit helper EXECUTE (denied before grant, allowed after; PUBLIC never has it)",
+    helperBefore === false && helperAfter.m === true && helperAfter.p === true);
+
+  await q(`create role aura_public_login_probe login password 'probe'`);
+  await q(`grant aura_public to aura_public_login_probe`);
+  const loginView = (await q(`select has_table_privilege('aura_public_login_probe','aura.public_products','SELECT') as ok`))[0].ok;
+  const loginBase = (await q(`select has_table_privilege('aura_public_login_probe','aura.products','SELECT') as ok`))[0].ok;
+  ok("1.24 public LOGIN inheriting aura_public gets view SELECT only, zero base-table SELECT",
+    loginView === true && loginBase === false);
+  await q(`revoke aura_public from aura_public_login_probe`);
+  await q(`drop role aura_public_login_probe`);
+
   // == Group 2: anonymous reads via definer views; base tables fully denied ====
   const pub = await unit("aura_public", null, () =>
     q(`select slug from aura.public_products order by slug`)

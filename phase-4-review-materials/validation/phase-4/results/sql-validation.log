@@ -23,6 +23,11 @@ PASS  1.16 all five definer views are owned by the catalog owner (not a privileg
 PASS  1.17 catalog owner is nologin/nosuperuser/nobypassrls and owns every base table the views read
 PASS  1.18 all five public views are SECURITY DEFINER (security_invoker not set)
 PASS  1.19 effective grants: aura_public SELECT on the five views only, zero base-table SELECT
+PASS  1.20 member executor (CREATEROLE + catalog-owner membership) can reassign a definer view to the catalog owner
+PASS  1.21 non-member executor is DENIED ownership reassignment to the catalog owner
+PASS  1.22 a non-superuser MEMBER of the table owner bypasses catalog RLS (owner exemption); a non-member is filtered
+PASS  1.23 note-accessor owner needs explicit helper EXECUTE (denied before grant, allowed after; PUBLIC never has it)
+PASS  1.24 public LOGIN inheriting aura_public gets view SELECT only, zero base-table SELECT
 PASS  2.1 public projection shows exactly the three published products (pre-0009 duplicate slug twice)
 PASS  2.2 public media is image-only (reference kind hidden)
 PASS  2.3 variant view allowlist (no id, no sku; keyed by product_slug)
@@ -100,4 +105,4 @@ PASS  5.3 app role cannot touch public rate limits (two-way isolation)
 PASS  6.1 proposed migrations replay twice on a fresh engine without error
 PASS  6.2 engine recorded for the evidence log
 
-92 passed, 0 failed
+97 passed, 0 failed
