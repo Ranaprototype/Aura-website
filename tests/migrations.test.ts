@@ -13,14 +13,18 @@ import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const directory = fileURLToPath(new URL("../supabase/migrations", import.meta.url));
+const directory = fileURLToPath(
+  new URL("../supabase/migrations", import.meta.url)
+);
 let engine: PGlite;
 let files: string[];
 
 beforeAll(async () => {
   engine = new PGlite();
   await engine.waitReady;
-  files = (await readdir(directory)).filter(file => file.endsWith(".sql")).sort();
+  files = (await readdir(directory))
+    .filter(file => file.endsWith(".sql"))
+    .sort();
   for (const file of files)
     await engine.exec(await readFile(path.join(directory, file), "utf8"));
   // Replaying every migration must be safe: they are written additively.
@@ -33,21 +37,28 @@ afterAll(async () => {
 });
 
 describe("migration set", () => {
-  it("ships the identity, email and privilege migrations after the baseline", () => {
+  it("ships the identity, email, privilege and catalogue migrations after the baseline", () => {
     expect(files).toEqual([
       "0001_hello.sql",
       "0002_identity.sql",
       "0003_email.sql",
       "0004_roles.sql",
+      "0005_seller_catalog.sql",
+      "0006_catalog_privileges.sql",
     ]);
   });
 
   it("keeps the Phase 0 table untouched and creates the private schema", async () => {
-    const tables = await engine.query<{ table_name: string; table_schema: string }>(
+    const tables = await engine.query<{
+      table_name: string;
+      table_schema: string;
+    }>(
       `select table_name, table_schema from information_schema.tables
         where table_schema in ('public','aura') order by table_schema, table_name`
     );
-    const names = tables.rows.map(row => `${row.table_schema}.${row.table_name}`);
+    const names = tables.rows.map(
+      row => `${row.table_schema}.${row.table_name}`
+    );
     expect(names).toContain("public.hello");
     for (const table of [
       "aura.principals",
@@ -62,29 +73,64 @@ describe("migration set", () => {
       "aura.email_events",
       "aura.email_rate_limits",
       "aura.auth_rate_limits",
+      "aura.seller_profiles",
+      "aura.categories",
+      "aura.category_attributes",
+      "aura.products",
+      "aura.product_revisions",
+      "aura.product_variants",
+      "aura.product_media",
+      "aura.product_attribute_values",
+      "aura.audit_events",
     ])
       expect(names, table).toContain(table);
     // Nothing new is exposed in the PostgREST-visible public schema.
-    expect(names.filter(name => name.startsWith("public."))).toEqual(["public.hello"]);
+    expect(names.filter(name => name.startsWith("public."))).toEqual([
+      "public.hello",
+    ]);
   });
 
   it("enables row level security on every tenant table", async () => {
-    const rows = await engine.query<{ relname: string; relrowsecurity: boolean }>(
+    const rows = await engine.query<{
+      relname: string;
+      relrowsecurity: boolean;
+    }>(
       `select c.relname, c.relrowsecurity
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'aura' and c.relkind = 'r'`
     );
-    const byName = Object.fromEntries(rows.rows.map(row => [row.relname, row.relrowsecurity]));
-    for (const table of ["organizations", "memberships", "invitations", "projects"])
+    const byName = Object.fromEntries(
+      rows.rows.map(row => [row.relname, row.relrowsecurity])
+    );
+    for (const table of [
+      "organizations",
+      "memberships",
+      "invitations",
+      "projects",
+      "seller_profiles",
+      "products",
+      "product_revisions",
+      "product_variants",
+      "product_media",
+      "product_attribute_values",
+      "audit_events",
+      "categories",
+      "category_attributes",
+    ])
       expect(byName[table], table).toBe(true);
   });
 
   it("defines policies for each tenant table instead of relying on grants", async () => {
-    const policies = await engine.query<{ tablename: string; policyname: string }>(
+    const policies = await engine.query<{
+      tablename: string;
+      policyname: string;
+    }>(
       `select tablename, policyname from pg_policies where schemaname = 'aura'`
     );
     const byTable = (table: string) =>
-      policies.rows.filter(row => row.tablename === table).map(row => row.policyname);
+      policies.rows
+        .filter(row => row.tablename === table)
+        .map(row => row.policyname);
     expect(byTable("projects").sort()).toEqual([
       "projects_admin_delete",
       "projects_member_select",
@@ -96,6 +142,33 @@ describe("migration set", () => {
       "invitations_staff_insert",
       "invitations_staff_select",
       "invitations_staff_update",
+    ]);
+    // Phase 3: default-deny policies plus the explicit platform-admin paths.
+    expect(byTable("products").sort()).toEqual([
+      "products_admin_update",
+      "products_member_select",
+      "products_writer_insert",
+      "products_writer_update",
+    ]);
+    expect(byTable("seller_profiles").sort()).toEqual([
+      "seller_profiles_admin_update",
+      "seller_profiles_member_select",
+      "seller_profiles_staff_insert",
+      "seller_profiles_staff_update",
+    ]);
+    expect(byTable("audit_events").sort()).toEqual([
+      "audit_events_actor_insert",
+      "audit_events_member_select",
+    ]);
+    expect(byTable("categories")).toEqual(["categories_read"]);
+    expect(byTable("organizations")).toContain(
+      "organizations_platform_admin_select"
+    );
+    // Revisions may only be decided by a platform administrator.
+    expect(byTable("product_revisions").sort()).toEqual([
+      "product_revisions_admin_update",
+      "product_revisions_member_select",
+      "product_revisions_writer_insert",
     ]);
   });
 
@@ -144,7 +217,49 @@ describe("migration set", () => {
         .sort();
     expect(forTable("organizations")).toEqual(["SELECT"]);
     expect(forTable("memberships")).toEqual(["SELECT"]);
-    expect(forTable("projects")).toEqual(["DELETE", "INSERT", "SELECT", "UPDATE"]);
+    expect(forTable("projects")).toEqual([
+      "DELETE",
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+    ]);
+
+    // Phase 3: catalogue rows are archived, never deleted; reference data is
+    // read-only; the audit trail cannot be updated or removed by the runtime.
+    expect(forTable("products")).toEqual(["INSERT", "SELECT", "UPDATE"]);
+    expect(forTable("seller_profiles")).toEqual(["INSERT", "SELECT", "UPDATE"]);
+    expect(forTable("categories")).toEqual(["SELECT"]);
+    expect(forTable("category_attributes")).toEqual(["SELECT"]);
+    expect(forTable("audit_events")).toEqual(["INSERT", "SELECT"]);
+    expect(forTable("product_revisions")).toEqual([
+      "INSERT",
+      "SELECT",
+      "UPDATE",
+    ]);
+  });
+
+  it("keeps the Phase 3 privilege evaluator and snapshot builder private", async () => {
+    const rows = await engine.query<{
+      name: string;
+      prosecdef: boolean;
+      proconfig: string[] | null;
+      public_execute: boolean;
+      app_execute: boolean;
+    }>(
+      `select p.proname as name, p.prosecdef, p.proconfig,
+              has_function_privilege('public', p.oid, 'EXECUTE') as public_execute,
+              has_function_privilege('aura_app', p.oid, 'EXECUTE') as app_execute
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'aura' and p.proname in ('is_platform_admin', 'build_product_snapshot')
+        order by p.proname`
+    );
+    expect(rows.rows).toHaveLength(2);
+    for (const row of rows.rows) {
+      expect(row.prosecdef, row.name).toBe(true);
+      expect(row.public_execute, row.name).toBe(false);
+      expect(row.app_execute, row.name).toBe(true);
+      expect(row.proconfig, row.name).toContain("search_path=pg_catalog, aura");
+    }
   });
 
   it("revokes PUBLIC execute on the security definer functions", async () => {
@@ -180,7 +295,10 @@ describe("migration set", () => {
       `select has_schema_privilege('public', 'aura', 'USAGE') as has`
     );
     expect(usage.rows[0]?.has).toBe(false);
-    const publicGrants = await engine.query<{ table_name: string; privilege_type: string }>(
+    const publicGrants = await engine.query<{
+      table_name: string;
+      privilege_type: string;
+    }>(
       `select table_name, privilege_type from information_schema.role_table_grants
         where table_schema = 'aura' and grantee = 'PUBLIC'`
     );

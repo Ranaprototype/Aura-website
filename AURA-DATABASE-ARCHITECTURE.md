@@ -68,3 +68,56 @@ For a user request, the trusted assertion flows **verified server-side session �
 Separate reversible private profile data from immutable commercial snapshots and approval receipts. Define retention by record class: short-lived sessions/jobs and quarantined uploads expire; withdrawal removes publication/search/CDN access and stops further processing; financial obligations, disputes, moderation evidence and legal holds may require restricted retention. Pseudonymize where lawful; do not cascade profile deletion into order/payment ledgers. Track deletion through object versions, providers, search, caches and backup expiry; reapply deletions after restore. Jurisdiction, retention periods, RPO/RTO and evidence ownership are **pending decisions**, not promises of immediate erasure.
 
 Future migrations: version-controlled additive change → dual-compatible readers/writers → bounded resumable backfill → validate constraints/permissions → later contract after old binaries retire. Verify applied ledger and drift first; test clean install, upgrade with fixtures, application rollback against expanded schema, concurrent readers and restore. Use transaction-safe DDL where supported; schedule non-transactional index builds separately. On failure stop rollout, roll application back if compatible or use a reviewed forward fix; destructive restore requires owner-approved recovery and reconciliation of provider events. Do not invent down migrations that discard data.
+
+## Phase 3 as implemented (seller and catalogue)
+
+Two additive migrations extend the Phase 2 schema without editing deployed
+history: `0005_seller_catalog.sql` (tables, guards, RLS, audit, seeds) and
+`0006_catalog_privileges.sql` (grants and the `aura.storefront_products` view).
+Both replay after `0001`–`0004` in fresh embedded PostgreSQL and are asserted by
+`tests/migrations.test.ts`.
+
+- **Tables:** `seller_profiles` (PK `org_id`), `categories`, `category_attributes`,
+  `products`, `product_revisions`, `product_variants`, `product_media`,
+  `product_attribute_values`, `audit_events`.
+- **Tenant integrity:** every catalogue child table carries `org_id` and
+  references its parent through a **composite** `(id, org_id)` foreign key. A
+  cross-tenant parent is rejected by the database even if application filtering
+  is bypassed. Products reference the seller profile by `(seller_id, org_id)`.
+- **Child lifecycle:** `catalogue_child_guard` runs on `product_variants`,
+  `product_media` and `product_attribute_values`. It locks the parent, refuses
+  changes while the product is submitted or archived, and sets
+  `pending_changes` on an approved product so the approved revision no longer
+  describes the listing.
+- **Lifecycle guards:** `products_guard`, `product_revisions_guard`,
+  `product_attribute_values_guard` and `seller_profiles_guard` enforce the
+  transition table, immutable content while submitted or archived, approval only
+  by `aura.is_platform_admin()`, required completeness before submission,
+  category/attribute validation and the rule that a non-admin cannot write
+  review metadata. `build_product_snapshot(product)` produces the frozen
+  revision JSON. Both security-definer functions pin `search_path` and revoke
+  `PUBLIC` execute.
+- **Audit:** `audit_seller_profile` and `audit_product` write append-only rows;
+  `audit_events_guard` rejects `UPDATE` and `DELETE` for every role.
+  `sorted_events()` keeps the payload deterministic.
+- **Policies:** RLS is enabled on all nine tables. Reference data is readable by
+  any runtime caller; tenant rows require `aura.is_active_member(org_id)` plus a
+  role predicate for writes. Platform administration has its own explicit
+  policies (seller/product/revision update, organization select) gated on
+  `aura.is_platform_admin()`. There is no policy that permits deletion of a
+  product or an audit row.
+- **Grants:** `aura_app` receives only the DML each path needs — no `DELETE` on
+  products, revisions or audit events, and `SELECT` alone on categories.
+- **Seeds:** three categories with typed attributes (required/optional, select
+  options, numeric bounds), inserted idempotently.
+- **Projection:** `aura.storefront_products` is a `security_invoker` view over
+  approved, current (`pending_changes = false`) products **joined to an approved
+  seller in the same organization**. It is granted to the
+  runtime role but is not exposed over HTTP in this phase.
+
+Known limits of the evidence remain those of the disposable engine: the audit ran
+on **PostgreSQL 18.6 compiled to WebAssembly (PGlite 0.5.16)**, a single-process
+build, so these results prove SQL, trigger and policy behaviour, not
+multi-backend contention or deployed grants. The owner must compare the
+migration ledger, effective grants and exposed schemas in the target environment
+before relying on them.

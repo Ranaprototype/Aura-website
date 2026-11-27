@@ -41,3 +41,58 @@ Workers claim limited batches under leased locks, release DB connection before e
 ## Files, integrations and operations
 
 Issue upload intent for approved type/size and tenant, allocate server-chosen private quarantine key, expire signed grant; verify checksum, decoded type and scan result before promotion. Serve only authorized revisions via short-lived signed GET. Never trust uploaded URL, file extension or claimed dimensions. Provider adapters validate wire status, media type, shape and semantic match before acknowledging success (as the diagnostics adapter now does). Bound retries/timeouts by operation; distinguish provider outage, permanent rejection and uncertain completion. Protect secrets server-side. Record redacted correlation IDs, latency, status classes, transition counts and queue lag; alert on duplicate spikes, stuck outbox and financial mismatches. See [security boundaries](AURA-SECURITY-ARCHITECTURE.md).
+
+## Phase 3 seller and catalogue routes (implemented)
+
+These routes exist in `server/modules/marketplace/` and are mounted at `/api/v1`
+after session attachment. Every one requires an authenticated session with a
+verified email; mutations additionally require the CSRF header and an allowed
+origin. Organization scope comes only from `x-aura-org` validated against a live
+membership row inside the request transaction — no body field, path parameter or
+token claim can change the tenant.
+
+| Route | Authorization | Notes |
+|---|---|---|
+| `GET /seller/dashboard`, `GET /seller/profile` | any active member (viewer+) | Profile plus append-only audit history |
+| `PUT /seller/profile`, `POST /seller/profile/submit` | `CATALOG_MANAGE_ROLES` (owner/admin) | Strict body allowlist; `seller_already_submitted` is a conflict |
+| `GET /categories` | any active member | Global reference data with typed attribute definitions |
+| `GET/POST /seller/products`, `GET/PATCH /seller/products/:id` | `CATALOG_WRITE_ROLES` | List filter is allowlisted; products are never hard-deleted |
+| `POST /seller/products/:id/submit` | `CATALOG_WRITE_ROLES` | Freezes a numbered revision and requests review |
+| `POST /seller/products/:id/archive` | `CATALOG_MANAGE_ROLES` | Irreversible; makes the product non-purchasable and clears pending state |
+| variants, media, attributes sub-routes | `CATALOG_WRITE_ROLES` | Media accepts external `https` references only; attributes are replaced wholesale |
+| `GET /admin/sellers[/:orgId]`, `POST .../approve`, `POST .../reject` | platform administrator only | Rejection requires a non-empty note |
+| `GET /admin/products[/:id]`, `POST .../approve`, `POST .../reject` | platform administrator only | Detail returns the submitted snapshot, revision and audit history |
+
+Design rules applied, consistent with the contracts above:
+
+- **No client-trusted identity.** Seller, organization, product owner and role
+  are all derived server-side. Possession of a product UUID grants nothing:
+  every seller lookup and mutation carries an explicit `org_id` predicate in
+  addition to the RLS policy.
+- **Strict contracts.** zod objects reject unknown fields, bound every string,
+  and validate slugs, SKUs, hex colours, media URLs and category attribute
+  values. Request bodies are capped at 32 kB for this router.
+- **Pagination.** List endpoints accept a bounded `limit` (default 100, maximum
+  200) and use a stable sort; there is no cursor yet. Confirm catalogue sizes
+  before Phase 4.
+- **Origin and CSRF.** The origin/`Sec-Fetch-Site` allowlist and double-submit
+  cookie are mounted for all of `/api/v1`; each route also verifies the
+  session-bound CSRF token.
+- **Stable error codes.** Conflicts return `409` (`seller_not_approved`,
+  `product_locked`, `product_already_submitted`, `sku_exists`, `slug_exists`,
+  `revision_required`), validation `400` (`product_incomplete`,
+  `invalid_attribute_value`, `invalid_request`), authorization `403`
+  (`role_forbidden`, `organization_forbidden`, `csrf_failed`) and identity
+  `401`. Messages never include SQL, stack traces or other tenants' data.
+- **Transactional consistency.** The request transaction is threaded through
+  every loader and mutation, so RLS context is bound to the same connection and
+  audit rows commit or roll back with the change. Pool queries are never issued
+  inside an open transaction.
+- **Approval is server-side.** The API never accepts `purchasable`, `status`,
+  `approved_at` or review metadata from a seller request; those fields are set
+  by guarded database transitions after a platform decision.
+- **Audit is written on every decision.** Seller and product decisions record
+  actor, organization, entity, transition and note.
+
+Phase 3 deliberately adds **no public catalogue, checkout, payment, shipping or
+generation endpoint**.

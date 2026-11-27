@@ -15,6 +15,10 @@ import AccountPage from "./pages/AccountPage";
 import { ComparisonPage } from "./components/Phase6ProductExtras";
 import TestSupabase from "./pages/TestSupabase";
 import WorkspacePage from "./pages/WorkspacePage";
+import SellerDashboardPage from "./pages/SellerDashboardPage";
+import SellerProductsPage from "./pages/SellerProductsPage";
+import SellerProductPage from "./pages/SellerProductPage";
+import AdminReviewPage from "./pages/AdminReviewPage";
 import {
   AcceptInvitationPage,
   ForgotPasswordPage,
@@ -42,6 +46,12 @@ function Router() {
   if (path === "/verify-email") return <VerifyEmailPage />;
   if (path === "/accept-invitation") return <AcceptInvitationPage />;
   if (path === "/workspace") return <WorkspacePage />;
+  if (path === "/seller") return <SellerDashboardPage />;
+  if (path === "/seller/products") return <SellerProductsPage />;
+  const sellerProductMatch = path.match(/^\/seller\/products\/([^/]+)$/);
+  if (sellerProductMatch)
+    return <SellerProductPage productId={sellerProductMatch[1]} />;
+  if (path === "/admin/review") return <AdminReviewPage />;
   if (path === "/compare") {
     const slugs =
       new URLSearchParams(window.location.search).get("products")?.split(",") ||

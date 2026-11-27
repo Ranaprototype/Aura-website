@@ -21,6 +21,14 @@ Use the verified server-side session as the source of principal identity and cur
 
 This choice costs a scoped authorization lookup and a pinned connection per transaction. Keep transactions short rather than caching authority past revocation. Acceptance depends on the [database contract](AURA-DATABASE-ARCHITECTURE.md#identity-on-a-pooled-sql-connection-target-contract) and [isolation test matrix](AURA-SECURITY-ARCHITECTURE.md#identity-boundary-verification-gate-before-protected-data-access), not on choosing a particular pooler or IdP now.
 
+### Phase 3 decisions (implemented on an isolated branch, not merged)
+
+| ADR | Choice and why | Alternative considered / cost and downside | Dependency or revisit trigger |
+|---|---|---|---|
+| 11 · Catalogue ownership and lifecycle | Products belong to an organization; the seller profile is one row per organization. Lifecycle (`draft`, `submitted`, `approved`, `rejected`, `archived`) is enforced by database guards, with immutable numbered revisions and a derived purchasability predicate that any content edit — including child rows — clears. | Deriving purchasability from current content invites drift between listing and review; per-user seller profiles would fragment the business identity and break org-scoped permissions. Rejecting/editing in place would erase what a reviewer approved. | Revisit if sellers need per-storefront profiles or multi-entity ownership. Migration-managed, not seller-editable. |
+| 12 · Media as external references | Store validated `https` URLs plus alt text; fetch nothing server-side. | Server-side fetches introduce SSRF, storage, scanning and CDN obligations that this phase cannot staff. Uploads should arrive with an approved bucket, quarantine and transform policy. | Revisit when an upload/CDN decision and abuse controls are approved; migrate references to immutable asset ids. |
+| 13 · Platform review as a separate grant | `aura.platform_admins` is global and provisioned out of band; `/admin/*` routes require it, and the database rejects non-admin approvals even under direct SQL. | Reusing an organization role would allow self-approval and blur separation of duties. A per-category reviewer role adds complexity without a current use case. | Revisit when review volume needs specialization, escalation or four-eyes approval. |
+
 ## Decision gates, not implementation tasks for this phase
 
 1. Product + legal + finance: select seller/merchant model, quote/commitment/cancellation terms, fulfillment liability and approval thresholds.

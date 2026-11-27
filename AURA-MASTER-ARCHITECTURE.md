@@ -8,6 +8,21 @@
 
 Use Node 22.22.3 and Corepack with the pnpm version in `package.json`. `corepack pnpm install --frozen-lockfile --ignore-scripts`. In separate terminals run `corepack pnpm dev:api` (127.0.0.1:3001) and `corepack pnpm dev` (127.0.0.1:3000). Browse the latter; requests to `/api` are proxied, never addressed to a backend host in browser code. `PORT` changes the API port, not the UI port. Both tools use the same server setting: shell first, then repository `.env.local`, otherwise 3001. Mode-specific Vite env files do not select the API listener. Restart both after configuration changes. DB configuration is optional; without it, readiness is unavailable by design. For the built app run `corepack pnpm build` then `corepack pnpm start` from root. This is a local verification path, not deployment approval.
 
+## Implemented through Phase 3 (branch only, awaiting review)
+
+Phases 1 and 2 added scrypt identity, opaque hashed sessions, CSRF double-submit,
+single-use email tokens, organizations/memberships/invitations, and RLS-backed
+tenant isolation. Phase 3 adds the seller profile review workflow and the
+product catalogue: `aura.seller_profiles`, `products`, `product_revisions`,
+`product_variants`, `product_media`, `product_attribute_values`,
+`category_attributes` and append-only `audit_events`, served by
+`server/modules/marketplace/` and four new client screens (`/seller`,
+`/seller/products`, `/seller/products/:id`, `/admin/review`). Only a product
+whose latest submitted revision was approved by a platform administrator is
+purchasable; price, inventory, checkout and manufacturing remain unimplemented.
+See [the Phase 3 architecture](AURA-PHASE-3-ARCHITECTURE.md) and
+[report](AURA-PHASE-3-REPORT.md). Nothing here is merged or deployed.
+
 ## Future contracts (ownership decisions, not implemented services)
 
 - **Authentication, Users, Customers, Sellers, Manufacturers:** verified principal → scoped membership/capabilities. Each profile kind owns its data and visibility rules. Administration must use audited domain commands, not a privileged database shortcut.

@@ -21,7 +21,7 @@ export async function api<T = unknown>(
     method = "GET",
     body,
     org,
-  }: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; org?: string } = {}
+  }: { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown; org?: string } = {}
 ): Promise<ApiResult<T>> {
   const token = csrfToken();
   const headers: Record<string, string> = {};
@@ -53,6 +53,8 @@ export async function api<T = unknown>(
 
 export interface SessionInfo {
   authenticated: boolean;
+  /** Presentation only; the server re-checks the grant on every admin route. */
+  platformAdmin?: boolean;
   principal?: {
     id: string;
     email: string;

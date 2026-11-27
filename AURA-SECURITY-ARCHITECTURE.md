@@ -42,3 +42,37 @@ Required future acceptance evidence, using synthetic tenants, the actual planned
 Separate environment-specific issuer keys, webhook secrets, model budgets, storage grants, runtime and migration credentials; rotate with overlap and revocation tests. Secrets stay in an approved server-side secret store, never in Git, Vite public variables, images, browser storage or error strings. Restrict egress to configured providers; no arbitrary user/agent URLs. Limit payload depth, rate, concurrency and CPU; protect ingress and deliver CSP/TLS after compatibility tests. Log sanitized actor/role/org, resource ID/version, operation, request ID, purpose, authorization decision, approval ID and transition; no raw bodies, prompts, addresses, tokens or cards. Restrict append-only audit access, monitor privilege changes, separate retention/legal holds from product deletion. Encrypt at rest and in transit; classify private designs/IP, addresses, contacts, manufacturer quotes and model inputs before transfer. Require consent, region and no-training/retention terms; no private content in shared model evaluation without permission.
 
 **Unverified:** target Supabase grants, IdP/provider selection, direct network paths, secrets rotation, residency, real rate limits, incident scope, supplier contracts, backup restore and operator staffing. This design is not a security certification and does not authorize connecting or deploying anything.
+
+## Phase 3 seller and catalogue check (implemented)
+
+The seller surface reuses the Phase 2 session, CSRF, origin, verified-email and
+membership machinery; it adds no new credential, token, cookie or trust input.
+
+| Threat | Control | Evidence |
+|---|---|---|
+| Forged seller or organization identity in a request | Organization comes from `x-aura-org` matched to a live membership; seller row is selected by that organization inside the transaction; bodies delete any `orgId`/`sellerId` hint | `tests/marketplace-api.test.ts` (cross-org 403), `tests/marketplace-rls.test.ts` |
+| Cross-tenant read or write through a guessed UUID | Explicit `org_id` filter on every query plus RLS plus composite tenant FKs | RLS suite: select/insert/update child rows across tenants rejected |
+| Seller self-approval | Platform grant is a separate global table; review routes require it; database rejects non-admin approval even with direct SQL | API and SQL denial tests; `products_guard` |
+| Publishing without review | Purchasability is derived from approved status, `pending_changes=false`, an approved revision and an approved seller; submission freezes a revision; any content edit (row, variant, media or attribute) clears it | API lifecycle tests, RLS and audit suites |
+| Metadata tampering (`status`, `approved_at`, review fields) | Server requests cannot set them; the trigger rejects non-admin updates to review metadata | New RLS assertion "refuses seller-authored review metadata" |
+| Malicious media reference (SSRF, script URL) | `https` only, no whitespace, length bound, image extension allowlist, nothing fetched server-side | Schema tests and SQL check constraints |
+| Attribute injection | Values validated against the declared attribute type, requiredness and select options; DB trigger re-validates | Complete/invalid attribute tests |
+| Frozen catalogue edited through a child table | `catalogue_child_guard` refuses child changes while submitted/archived and withdraws approval on approved rows | RLS suite "locks child catalogue rows…", "clears approval when variants, media or attributes change…" |
+| Cross-site request with a stolen cookie | Session-bound CSRF token plus origin/`Sec-Fetch-Site` allowlisting for the whole `/api/v1` surface | API suite `rejects a cross-site origin…`; probe returned `403 origin_rejected` |
+| Audit tampering | Append-only trigger plus no `UPDATE`/`DELETE` grants for the runtime | Migration privilege test |
+| Tenant enumeration through errors | Uniform codes; no cross-tenant existence signal beyond the standard 403 | API tests |
+| Role confusion in the browser | The client renders `platformAdmin` but the server re-decides every request | UI test gates the queue on the server flag |
+
+Audit result (Phase 3 review): the seven owner questions were exercised directly
+(`tests/marketplace-audit.test.ts`). Cross-organization access, self-approval,
+viewer writes, cross-organization child rows, post-approval content changes and
+the approved-seller projection all behaved correctly; the audit found and fixed
+an approved-content review gap, a missing seller filter in the projection, a
+seller-status gap in the derived predicate, and origin checks that had only been
+mounted on `/api/v1/auth`. Details: [Phase 3 report](AURA-PHASE-3-REPORT.md).
+
+Not covered by this phase's evidence: deployed grant comparison, multi-process
+RLS concurrency, load/abuse rates for catalogue writes (no new limiter was
+added; the existing ingress limits and a 32 kB body cap apply), independent
+penetration testing, accessibility and cross-browser review. Browser tests are
+blocked in the audit sandbox and must run in CI.

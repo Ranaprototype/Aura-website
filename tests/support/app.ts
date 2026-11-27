@@ -111,6 +111,14 @@ export class TestClient {
     return this.request<T>("POST", path, { ...options, body });
   }
 
+  put<T = Record<string, unknown>>(
+    path: string,
+    body?: unknown,
+    options?: Parameters<TestClient["request"]>[2]
+  ) {
+    return this.request<T>("PUT", path, { ...options, body });
+  }
+
   patch<T = Record<string, unknown>>(
     path: string,
     body?: unknown,
