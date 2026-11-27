@@ -69,3 +69,39 @@ A job records actor, purpose, tenant, input revision/hash, prompt-template versi
 Begin without Redis; durable jobs/outbox in PG. Consider Redis only for ephemeral quotas/cache/queue wake-ups if profiling justifies cost. Cache keys include authorization scope/version; fail closed for paid actions if quota authority is unavailable. Email/carrier/model outages should degrade individual functions, not browsing. Record structured, redacted logs, latency/error metrics, DB saturation, worker lag, provider cost and reconciliation age. Alert named operators on failed restores, stuck payments, runaway spend and sustained authorization failures; do not log inputs or payment payloads. Require encrypted point-in-time DB backups, versioned asset backups, key recovery and restore drills (including object/database consistency and replay deduplication). Business owners must set recovery time/data-loss objectives before hosting. CI builds immutable artifacts; promotion requires human sign-off, scoped migration plan, health checks and a tested rollback/roll-forward path. No deployment pipeline added.
 
 Read alongside [database ownership](AURA-DATABASE-ARCHITECTURE.md), [security](AURA-SECURITY-ARCHITECTURE.md) and [decision records](AURA-ARCHITECTURE-DECISIONS.md).
+
+## Phase 3 module boundary as implemented
+
+Seller management and the catalogue live in one module inside the existing
+modular monolith: `server/modules/marketplace/` (composition, schemas, helpers,
+seller, catalog, review). It shares the Phase 2 session/authorization module,
+database pool, error envelope and audit table; there is no new service, queue,
+worker, cache or provider integration.
+
+Boundaries that keep later phases cheap:
+
+- **Lifecycle before commerce.** Approval produces `approved_revision_id` and a
+  stored `purchasable` flag. A future checkout or publication phase can consume
+  `aura.storefront_products` without changing seller code, and must not treat a
+  seller-supplied flag as authority.
+- **Snapshots are immutable.** Submitted revisions hold the exact title,
+  description, variants, media and attributes that a reviewer saw. Future
+  pricing, quotes or manufacturing work should reference a revision, not a
+  mutable product row.
+- **No invented commerce data.** Prices, currency, stock, shipping and
+  manufacturing fields were intentionally not created; adding them requires a
+  designed phase with owner approval.
+- **Global reference data, tenant-owned content.** Categories and attributes are
+  seeded, read-only to the runtime and changed only by migration, so a seller
+  cannot redefine the validation rules that constrain them.
+- **Platform review is a distinct grant.** It is not an organization role, which
+  keeps separation of duties intact and gives a future admin console a clean
+  boundary.
+- **Frontend surfaces are additive.** The four new pages reuse the HOLO design
+  system and router; the storefront, cart, wishlist and Phase 2 workspace were
+  not modified.
+
+Deferred by design: image upload/storage, CDN delivery, moderation of user
+content, seller payout identity, multi-user seller teams beyond existing
+memberships, public listing pages, search/indexing, and any AI-assisted content
+generation or auto-approval.

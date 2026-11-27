@@ -59,6 +59,10 @@ it.each([
   "/order/fixture",
   "/account/orders/fixture",
   "/compare?products=a,b",
+  "/seller",
+  "/seller/products",
+  "/seller/products/22222222-2222-4222-8222-222222222222",
+  "/admin/review",
 ])("preserves document %s", async path => {
   const r = await fetch(base + path);
   expect(r.status).toBe(200);

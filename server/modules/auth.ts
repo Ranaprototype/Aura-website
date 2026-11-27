@@ -148,6 +148,8 @@ export function authRoutes(services: AppServices, options: { appOrigin: string }
 
   const sessionSummary = async (principalId: string) => ({
     organizations: await auth.memberships(principalId),
+    // Presentation only: every platform route re-checks this grant in the database.
+    platformAdmin: await auth.isPlatformAdmin(principalId),
   });
 
   router.post("/register", async (req, res, next) => {

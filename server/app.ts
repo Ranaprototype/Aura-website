@@ -3,8 +3,9 @@ import path from "node:path";
 import { isRetiredPath, isStorefrontPath } from "../shared/routes";
 import { diagnostics } from "./modules/diagnostics";
 import { authRoutes } from "./modules/auth";
-import { attachSession } from "./modules/authorized";
+import { attachSession, csrfGuard } from "./modules/authorized";
 import { workspaceRoutes } from "./modules/workspace";
+import { marketplaceRoutes } from "./modules/marketplace";
 import type { DiagnosticsStore } from "./lib/supabase";
 import type { AppServices } from "./services";
 import { errors, fail } from "./http/errors";
@@ -33,6 +34,10 @@ export function createApp({
   if (services) {
     const origin = services.appOrigin;
     app.use("/api/v1", attachSession(services));
+    // Origin allowlisting and the double-submit cookie apply to the whole
+    // versioned API, not just the auth routes; per-route authorization then
+    // verifies the session-bound token as well.
+    app.use("/api/v1", csrfGuard(services));
     app.use(
       "/api/v1/auth",
       express.json({ limit: "16kb" }),
@@ -42,6 +47,13 @@ export function createApp({
       "/api/v1",
       express.json({ limit: "16kb" }),
       workspaceRoutes(services, { appOrigin: origin })
+    );
+    // Phase 3: seller onboarding, catalogue and platform review. Same session,
+    // same tenancy, same CSRF and origin checks as every other versioned route.
+    app.use(
+      "/api/v1",
+      express.json({ limit: "32kb" }),
+      marketplaceRoutes(services)
     );
   }
   app.use(
