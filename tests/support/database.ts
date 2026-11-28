@@ -26,6 +26,8 @@ export interface TestDatabase {
   url: string;
   /** Runtime access exactly as the API uses it: non-owner role. */
   db: PgDatabase;
+  /** Phase 4 anonymous public read pool: restricted aura_public, no principal. */
+  publicDb: PgDatabase;
   /** Administrative handle used only to model an operator/test fixture. */
   admin: PgDatabase;
   close(): Promise<void>;
@@ -82,14 +84,19 @@ export async function startTestDatabase(): Promise<TestDatabase> {
   const url = `postgres://postgres@127.0.0.1:${port}/postgres`;
 
   const db = new PgDatabase({ url, role: "aura_app", max: 4 });
+  // The anonymous public pool assumes the restricted aura_public role and never
+  // binds a principal, exactly as production's separate public login would.
+  const publicDb = new PgDatabase({ url, role: "aura_public", max: 4 });
   const admin = new PgDatabase({ url, max: 2 });
-  serializeUnitsOfWork(db, admin);
+  serializeUnitsOfWork(db, publicDb, admin);
   return {
     url,
     db,
+    publicDb,
     admin,
     async close() {
       await db.close();
+      await publicDb.close();
       await admin.close();
       await server.stop();
       await engine.close();

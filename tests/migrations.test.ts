@@ -46,6 +46,8 @@ describe("migration set", () => {
       "0005_seller_catalog.sql",
       "0006_catalog_privileges.sql",
       "0007_review_separation.sql",
+      "0008_public_storefront.sql",
+      "0009_global_product_slugs.sql",
     ]);
   });
 
@@ -148,12 +150,14 @@ describe("migration set", () => {
     expect(byTable("products").sort()).toEqual([
       "products_admin_update",
       "products_member_select",
+      "products_public_select",
       "products_writer_insert",
       "products_writer_update",
     ]);
     expect(byTable("seller_profiles").sort()).toEqual([
       "seller_profiles_admin_update",
       "seller_profiles_member_select",
+      "seller_profiles_public_select",
       "seller_profiles_staff_insert",
       "seller_profiles_staff_update",
     ]);
@@ -250,7 +254,10 @@ describe("migration set", () => {
     // Phase 3: catalogue rows are archived, never deleted; reference data is
     // read-only; the audit trail cannot be updated or removed by the runtime.
     expect(forTable("products")).toEqual(["INSERT", "SELECT", "UPDATE"]);
-    expect(forTable("seller_profiles")).toEqual(["INSERT", "SELECT", "UPDATE"]);
+    // Phase 4 (0008): table-level SELECT on seller_profiles is revoked and
+    // replaced with a column allowlist that EXCLUDES the confidential
+    // suspension_note. Only INSERT/UPDATE remain as table grants.
+    expect(forTable("seller_profiles")).toEqual(["INSERT", "UPDATE"]);
     expect(forTable("categories")).toEqual(["SELECT"]);
     expect(forTable("category_attributes")).toEqual(["SELECT"]);
     expect(forTable("audit_events")).toEqual(["INSERT", "SELECT"]);
@@ -326,5 +333,113 @@ describe("migration set", () => {
         where table_schema = 'aura' and grantee = 'PUBLIC'`
     );
     expect(publicGrants.rows).toEqual([]);
+  });
+});
+
+describe("Phase 4 public storefront posture", () => {
+  it("creates a non-login, non-bypass catalog owner that owns the definer views", async () => {
+    const role = await engine.query<{
+      rolsuper: boolean;
+      rolbypassrls: boolean;
+      rolcanlogin: boolean;
+    }>(
+      `select rolsuper, rolbypassrls, rolcanlogin
+         from pg_roles where rolname = 'aura_catalog_owner'`
+    );
+    expect(role.rows[0]).toEqual({
+      rolsuper: false,
+      rolbypassrls: false,
+      rolcanlogin: false,
+    });
+    const views = await engine.query<{ viewname: string; owner: string }>(
+      `select viewname, viewowner as owner from pg_views
+        where schemaname = 'aura' and viewname like 'public_%'
+        order by viewname`
+    );
+    expect(views.rows.map(row => row.viewname)).toEqual([
+      "public_product_attributes",
+      "public_product_media",
+      "public_product_variants",
+      "public_products",
+      "public_slug_redirects",
+    ]);
+    for (const row of views.rows)
+      expect(row.owner, row.viewname).toBe("aura_catalog_owner");
+  });
+
+  it("gives aura_public zero base-table grants; only views and the limiter table", async () => {
+    const base = await engine.query<{ table_name: string }>(
+      `select distinct table_name from information_schema.role_table_grants
+        where table_schema = 'aura' and grantee = 'aura_public'
+          and table_name not in (
+            'public_products','public_product_variants','public_product_media',
+            'public_product_attributes','public_slug_redirects','public_rate_limits'
+          )`
+    );
+    expect(base.rows).toEqual([]);
+    // The anonymous role can read the discovery views but never the base tables.
+    const direct = await engine.query<{ has: boolean }>(
+      `select has_table_privilege('aura_public', 'aura.products', 'SELECT') as has`
+    );
+    expect(direct.rows[0]?.has).toBe(false);
+    const viaView = await engine.query<{ has: boolean }>(
+      `select has_table_privilege('aura_public', 'aura.public_products', 'SELECT') as has`
+    );
+    expect(viaView.rows[0]?.has).toBe(true);
+  });
+
+  it("excludes the confidential suspension_note from the runtime column allowlist", async () => {
+    const cols = await engine.query<{ column_name: string }>(
+      `select column_name from information_schema.role_column_grants
+        where table_schema = 'aura' and table_name = 'seller_profiles'
+          and grantee = 'aura_app' and privilege_type = 'SELECT'
+        order by column_name`
+    );
+    const names = cols.rows.map(row => row.column_name);
+    expect(names).toContain("suspended_at");
+    expect(names).toContain("suspended_by");
+    expect(names).not.toContain("suspension_note");
+    // The note is reachable only through the restricted SECURITY DEFINER accessor.
+    const fn = await engine.query<{ prosecdef: boolean; app_execute: boolean; public_execute: boolean }>(
+      `select p.prosecdef,
+              has_function_privilege('aura_app', p.oid, 'EXECUTE') as app_execute,
+              has_function_privilege('public', p.oid, 'EXECUTE') as public_execute
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'aura' and p.proname = 'seller_suspension_note'`
+    );
+    expect(fn.rows[0]?.prosecdef).toBe(true);
+    expect(fn.rows[0]?.app_execute).toBe(true);
+    expect(fn.rows[0]?.public_execute).toBe(false);
+  });
+
+  it("enforces global product slug uniqueness and keeps the public limiter isolated", async () => {
+    // 0009 adds a global UNIQUE INDEX on slug; the original per-organization
+    // constraint is retained (the reviewed rollback relies on it).
+    const indexes = await engine.query<{ indexname: string; indisunique: boolean }>(
+      `select i.relname as indexname, ix.indisunique
+         from pg_index ix
+         join pg_class i on i.oid = ix.indexrelid
+        where ix.indrelid = 'aura.products'::regclass
+          and i.relname = 'products_slug_global_key'`
+    );
+    expect(indexes.rows[0]?.indisunique).toBe(true);
+    const constraints = await engine.query<{ conname: string }>(
+      `select conname from pg_constraint
+        where conrelid = 'aura.products'::regclass and contype = 'u'
+        order by conname`
+    );
+    const names = constraints.rows.map(row => row.conname);
+    expect(names).toContain("products_org_slug_key");
+    // The public limiter is a separate table from the auth limiter.
+    const tables = await engine.query<{ table_name: string }>(
+      `select table_name from information_schema.tables
+        where table_schema = 'aura'
+          and table_name in ('public_rate_limits','auth_rate_limits')
+        order by table_name`
+    );
+    expect(tables.rows.map(row => row.table_name)).toEqual([
+      "auth_rate_limits",
+      "public_rate_limits",
+    ]);
   });
 });

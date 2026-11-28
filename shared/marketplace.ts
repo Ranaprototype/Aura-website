@@ -43,6 +43,10 @@ export interface SellerProfileView {
   reviewNote: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Phase 4 (D-03): suspension state is visible to org members and admins. */
+  suspendedAt: string | null;
+  /** Confidential note — only ever populated for owner/admin/platform admin. */
+  suspensionNote?: string | null;
 }
 
 export interface CategoryAttributeView {

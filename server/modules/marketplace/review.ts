@@ -15,6 +15,7 @@ import {
   loadRevisions,
   loadSeller,
   loadVariants,
+  loadSuspensionNote,
   serializeSeller,
   summarizeProduct,
   type ProductRow,
@@ -79,13 +80,16 @@ export function reviewRoutes(services: AppServices) {
         typeof req.query.status === "string" ? req.query.status : undefined;
       if (status && !SELLER_STATUSES.includes(status as SellerStatus))
         throw new RequestError(400, "invalid_status");
-      const rows = await tx.query<SellerRow & { org_name: string }>(
+      const rows = await tx.query<SellerRow & { org_name: string; suspension_note: string | null }>(
         `select sp.id, sp.org_id, sp.display_name, sp.legal_name, sp.business_email,
                 sp.country, sp.website, sp.description, sp.status, sp.submitted_at,
-                sp.reviewed_at, sp.review_note, sp.created_at, sp.updated_at,
-                o.name as org_name
+                sp.reviewed_at, sp.review_note, sp.suspended_at, sp.created_at, sp.updated_at,
+                o.name as org_name, sn.suspension_note
            from aura.seller_profiles sp
            join aura.organizations o on o.id = sp.org_id
+           left join lateral (
+             select aura.seller_suspension_note(sp.org_id) as suspension_note
+           ) sn on true
           ${status ? "where sp.status = $1" : ""}
           order by sp.submitted_at desc nulls last, sp.created_at desc
           limit 100`,
@@ -94,7 +98,7 @@ export function reviewRoutes(services: AppServices) {
       return {
         body: {
           sellers: rows.map(row => ({
-            ...serializeSeller(row),
+            ...serializeSeller(row, row.suspension_note),
             orgName: row.org_name,
           })),
         },
@@ -120,7 +124,7 @@ export function reviewRoutes(services: AppServices) {
       return {
         body: {
           organization: { id: orgId, name: rows[0].name },
-          seller: serializeSeller(seller),
+          seller: serializeSeller(seller, await loadSuspensionNote(tx, orgId)),
           audit: await loadAudit(tx, "seller_profile", seller.id),
           products: products.map(summarizeProduct),
         },
@@ -171,6 +175,68 @@ export function reviewRoutes(services: AppServices) {
           [orgId, parsed.data.note]
         );
         if (!rows[0]) throw new RequestError(409, "invalid_status_transition");
+        return {
+          body: {
+            seller: serializeSeller(rows[0]!),
+            audit: await loadAudit(tx, "seller_profile", rows[0]!.id),
+          },
+        };
+      } catch (error) {
+        return mapDatabaseError(error);
+      }
+    })
+  );
+
+  // Phase 4 (D-03): suspension is a platform-admin decision, four-eyes
+  // separated, atomic (overlay columns only) and noted. The database trigger
+  // records the actor and re-checks every rule; restore clears the overlay
+  // without touching status/approval history.
+  router.post(
+    "/admin/sellers/:orgId/suspend",
+    requirePlatformAdmin(services, async ({ tx, req }) => {
+      const orgId = uuidParam(req.params.orgId);
+      const parsed = reviewNoteBody.safeParse(req.body);
+      if (!parsed.success) throw new RequestError(400, "invalid_request");
+      const seller = await loadSellerOr404(tx, orgId);
+      if (seller.suspended_at) throw new RequestError(409, "seller_already_suspended");
+      await requireSeparatedReviewer(tx, orgId);
+      try {
+        const rows = await tx.query<SellerRow>(
+          `update aura.seller_profiles
+              set suspended_at = now(), suspension_note = $2
+            where org_id = $1 and suspended_at is null
+            returning ${SELLER_COLUMNS}`,
+          [orgId, parsed.data.note]
+        );
+        if (!rows[0]) throw new RequestError(409, "seller_already_suspended");
+        return {
+          body: {
+            seller: serializeSeller(rows[0]!, await loadSuspensionNote(tx, orgId)),
+            audit: await loadAudit(tx, "seller_profile", rows[0]!.id),
+          },
+        };
+      } catch (error) {
+        return mapDatabaseError(error);
+      }
+    })
+  );
+
+  router.post(
+    "/admin/sellers/:orgId/restore",
+    requirePlatformAdmin(services, async ({ tx, req }) => {
+      const orgId = uuidParam(req.params.orgId);
+      const seller = await loadSellerOr404(tx, orgId);
+      if (!seller.suspended_at) throw new RequestError(409, "seller_not_suspended");
+      await requireSeparatedReviewer(tx, orgId);
+      try {
+        const rows = await tx.query<SellerRow>(
+          `update aura.seller_profiles
+              set suspended_at = null
+            where org_id = $1 and suspended_at is not null
+            returning ${SELLER_COLUMNS}`,
+          [orgId]
+        );
+        if (!rows[0]) throw new RequestError(409, "seller_not_suspended");
         return {
           body: {
             seller: serializeSeller(rows[0]!),

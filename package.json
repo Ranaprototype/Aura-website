@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "test": "vitest run --config vitest.config.ts",
     "dev:api": "tsx watch server/index.ts",
-    "test:browser": "node --import tsx --test tests/browser.mjs tests/browser-auth.mjs tests/browser-seller.mjs"
+    "test:browser": "node --import tsx --test tests/browser.mjs tests/browser-auth.mjs tests/browser-seller.mjs",
+    "test:browser:storefront": "node --import tsx --test tests/browser-marketplace.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -189,6 +189,16 @@ export const marketplace = {
       method: "POST",
       body: { note },
     }),
+  suspendSeller: (orgId: string, note: string) =>
+    api<{ seller: SellerProfileView }>(`/admin/sellers/${orgId}/suspend`, {
+      method: "POST",
+      body: { note },
+    }),
+  restoreSeller: (orgId: string) =>
+    api<{ seller: SellerProfileView }>(`/admin/sellers/${orgId}/restore`, {
+      method: "POST",
+      body: {},
+    }),
   adminProducts: (status: string) =>
     api<{ products: AdminProduct[] }>(`/admin/products${q({ status })}`),
   adminProduct: (id: string) =>
@@ -249,6 +259,18 @@ export const explain = (
       return "Confirm your email address before using the seller tools.";
     case "invalid_request":
       return "Please check the values you entered.";
+    case "review_separation_required":
+      return "A reviewer who belongs to that organization cannot decide it (four-eyes).";
+    case "suspension_note_required":
+      return "A confidential suspension note is required.";
+    case "seller_already_suspended":
+      return "That seller is already suspended.";
+    case "seller_not_suspended":
+      return "That seller is not currently suspended.";
+    case "seller_suspended":
+      return "This seller is suspended; catalogue writes are frozen until restore.";
+    case "suspension_must_be_atomic":
+      return "A suspension decision cannot be combined with other changes.";
     default:
       return fallback;
   }

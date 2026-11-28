@@ -5,6 +5,8 @@ import { CommerceStatus } from "./components/CommerceStatus";
 import SneakerConfigurator from "./pages/SneakerConfigurator";
 import CatalogPage from "./pages/CatalogPage";
 import CategoryPage from "./pages/CategoryPage";
+import MarketplacePage from "./pages/MarketplacePage";
+import MarketplaceProductPage from "./pages/MarketplaceProductPage";
 import { getCategory } from "./lib/catalog";
 import GenericConfigurator from "./pages/GenericConfigurator";
 import CartPage from "./pages/CartPage";
@@ -77,6 +79,12 @@ function Router() {
         <CommerceOverlay />
       </>
     );
+  // Phase 4: additive public discovery namespace. Distinct prefixes so the HOLO
+  // preview configurators at /products/:slug and /product/sneaker are untouched.
+  const marketplaceProductMatch = path.match(/^\/marketplace\/product\/([^/]+)\/?$/);
+  if (marketplaceProductMatch)
+    return <MarketplaceProductPage slug={marketplaceProductMatch[1]} />;
+  if (path === "/marketplace") return <MarketplacePage />;
   const categoryMatch = path.match(/^\/category\/([^/]+)\/?$/);
   const category = categoryMatch ? getCategory(categoryMatch[1]) : undefined;
   if (category)
