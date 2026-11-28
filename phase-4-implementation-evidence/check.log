@@ -1,0 +1,4 @@
+
+> holo-phase1@1.0.0 check /home/user/Aura-website
+> tsc --noEmit && tsc -p tsconfig.node.json
+

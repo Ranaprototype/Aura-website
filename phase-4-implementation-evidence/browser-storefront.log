@@ -1,0 +1,20 @@
+
+> holo-phase1@1.0.0 test:browser:storefront /home/user/Aura-website
+> node --import tsx --test tests/browser-marketplace.mjs
+
+TAP version 13
+# Subtest: public discovery, detail redirect and admin suspension round-trip
+ok 1 - public discovery, detail redirect and admin suspension round-trip
+  ---
+  duration_ms: 6523.6913
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7588.522564

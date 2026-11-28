@@ -1,0 +1,108 @@
+Engine: PostgreSQL 18.6 (PGlite 0.5.16) on wasm32-unknown-emscripten, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.13 (e13ee988ce3d87a738dd8f3661d02223308c412a), 32-bit
+
+Replayed real migrations: 0001_hello.sql, 0002_identity.sql, 0003_email.sql, 0004_roles.sql, 0005_seller_catalog.sql, 0006_catalog_privileges.sql, 0007_review_separation.sql
+
+Applied proposed 0008_public_storefront.sql
+
+PASS  1.1 aura_public is nologin/noinherit/nosuperuser/nobypassrls
+PASS  1.2 schema USAGE granted to aura_public, revoked from PUBLIC
+PASS  1.3 aura_public has ZERO table-level SELECT on catalogue/reference base tables
+PASS  1.4 aura_public has ZERO column privileges (internal ids + seller fields unreachable)
+PASS  1.5 aura_public has SELECT on the five public definer views only
+PASS  1.6 aura_public has no privilege on identity/tenancy/audit/auth-rate tables
+PASS  1.7 aura_public cannot EXECUTE any identity/security-definer helper
+PASS  1.8 PUBLIC EXECUTE stripped (touch_updated_at, suspension guards); aura_app granted
+PASS  1.9 touch_updated_at trigger still fires with PUBLIC EXECUTE revoked
+PASS  1.10 LOGIN role inheriting aura_public reads the public projection (role inheritance)
+PASS  1.11 inherited login still cannot EXECUTE helpers
+PASS  1.12 every helper-calling policy is scoped TO aura_app
+PASS  1.13 reference-data policy categories_read remains PUBLIC (definition unchanged)
+PASS  1.14 public_products is a SECURITY DEFINER view (not security_invoker)
+PASS  1.15 aura_app column grants hide suspension_note but keep status/overlay columns (D-03)
+PASS  1.16 all five definer views are owned by the catalog owner (not a privileged migration role)
+PASS  1.17 catalog owner is nologin/nosuperuser/nobypassrls and owns every base table the views read
+PASS  1.18 all five public views are SECURITY DEFINER (security_invoker not set)
+PASS  1.19 effective grants: aura_public SELECT on the five views only, zero base-table SELECT
+PASS  1.20 member executor (CREATEROLE + catalog-owner membership) can reassign a definer view to the catalog owner
+PASS  1.21 non-member executor is DENIED ownership reassignment to the catalog owner
+PASS  1.22 a non-superuser MEMBER of the table owner bypasses catalog RLS (owner exemption); a non-member is filtered
+PASS  1.23 note-accessor owner needs explicit helper EXECUTE (denied before grant, allowed after; PUBLIC never has it)
+PASS  1.24 public LOGIN inheriting aura_public gets view SELECT only, zero base-table SELECT
+PASS  2.1 public projection shows exactly the three published products (pre-0009 duplicate slug twice)
+PASS  2.2 public media is image-only (reference kind hidden)
+PASS  2.3 variant view allowlist (no id, no sku; keyed by product_slug)
+PASS  2.4 public attributes expose key/label/value (no attribute id)
+PASS  2.5 product view allowlist (no org/product/revision id, no seller fields)
+PASS  2.6 direct base read of products is DENIED (zero base grants)
+PASS  2.7 direct base read of seller_profiles is DENIED
+PASS  2.8 SELECT * on base table denied
+PASS  2.9 child rows of a draft product are invisible in the public view
+PASS  2.10 forged aura.principal_id has no effect on the public path
+PASS  2.11 public role cannot read identity tables even with forged identity
+PASS  2.12 public INSERT denied
+PASS  2.13 public UPDATE denied
+PASS  2.14 public DELETE denied
+PASS  2.15 aura_app member behaviour unchanged (own drafts visible, cross-tenant denied)
+PASS  2.16 exact API list query (search/filter/sort capable) runs as aura_public; slug keyset, no ids/seller
+PASS  2.17 category filter narrows correctly (apparel has no published products)
+PASS  2.18 search narrows by term on the definer view (no base access, no new fields)
+PASS  2.19 attribute-value filter narrows via the public attributes view (knit=3, leather=0)
+PASS  2.20 selectable title sort orders correctly (title asc, slug tie-break)
+PASS  2.21 defense-in-depth: suspended seller's products hidden even with a base grant
+PASS  2.22 defense-in-depth: suspended seller's variants hidden
+PASS  2.23 defense-in-depth: suspended seller's media hidden
+PASS  2.24 defense-in-depth: suspended seller's attributes hidden
+PASS  2.25 defense-in-depth: unapproved seller's products hidden even with a base grant
+PASS  2.26 defense-in-depth: unapproved seller's variants hidden
+PASS  2.27 defense-in-depth: unapproved seller's media hidden
+PASS  2.28 defense-in-depth: unapproved seller's attributes hidden
+PASS  2.29 base grants revoked; aura_public back to zero base-table SELECT
+PASS  3.1 four-eyes: dual-role admin cannot suspend their own org
+PASS  3.2 suspension preserves status and product approval state
+PASS  3.3 suspended seller's products leave the public projection immediately
+PASS  3.4 suspended seller's media/variants also leave the public views
+PASS  3.5 seller.suspended audit records actor + noteRecorded, NOT the confidential note text
+PASS  3.6 ordinary member cannot SELECT the suspension_note column
+PASS  3.7 seller owner reads the note via the authorized accessor
+PASS  3.8 ordinary member calling the accessor is refused
+PASS  3.9 cross-organization owner cannot read the note
+PASS  3.10 platform administrator reads the note via the accessor
+PASS  3.11 four-eyes: dual-role admin cannot restore their own org
+PASS  3.12 non-member non-admin restore matches zero rows (RLS)
+PASS  3.13 non-admin member restore refused (suspension guard fires first)
+PASS  3.14 suspension requires a note
+PASS  3.15 suspended seller cannot create products
+PASS  3.16 suspended seller cannot edit draft content
+PASS  3.17 suspended seller cannot change child rows
+PASS  3.18 suspended seller cannot edit the profile
+PASS  3.19 platform admin can still decide a submitted product while seller suspended
+PASS  3.20 suspension must be atomic (no mixed content edit)
+PASS  3.21 restoration clears the overlay and preserves prior state
+PASS  3.22 restored products reappear with the same approval (plus the admin-approved one)
+PASS  3.23 seller.restored audit event exists (>=1; the item-4 defense-in-depth block also restores sellerA)
+PASS  3.24 approved_revision_id unchanged through suspend/restore
+PASS  3.25 accessor returns null after restoration (note cleared, overlay reversible)
+PASS  4.1 backfill without trigger handling fails (identity_required)
+PASS  4.2 slug rename on a suspended seller fails without trigger handling
+
+Applied proposed 0009_global_product_slugs.sql
+
+PASS  4.3 earliest product keeps the slug; later duplicate renamed deterministically
+PASS  4.4 collision redirect recorded with replacement slug
+PASS  4.5 global unique index present; per-org constraint preserved
+PASS  4.6 renamed product updated_at preserved (touch trigger disabled for backfill)
+PASS  4.7 rename audited with created_by fallback actor
+PASS  4.8 new product cannot take an existing global slug
+PASS  4.9 live product wins slug resolution over the inert collision redirect
+PASS  4.10 free legacy slug resolves to the canonical published slug (no ids exposed)
+PASS  4.11 only the inert collision redirect of a published product remains publicly resolvable
+PASS  4.12 rollback restores the original slug and removes collision redirects
+PASS  4.13 re-apply after rollback is deterministic
+PASS  4.14 rollback aborts on post-migration slug drift
+PASS  5.1 public limiter upsert increments per window
+PASS  5.2 public role cannot touch auth rate limits
+PASS  5.3 app role cannot touch public rate limits (two-way isolation)
+PASS  6.1 proposed migrations replay twice on a fresh engine without error
+PASS  6.2 engine recorded for the evidence log
+
+97 passed, 0 failed

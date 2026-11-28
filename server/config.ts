@@ -76,6 +76,18 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
       AUTH_REGISTER_HOURLY_LIMIT: z.coerce.number().int().min(1).max(10_000).default(20),
       AUTH_LOGIN_IP_LIMIT: z.coerce.number().int().min(5).max(10_000).default(60),
       AUTH_LOGIN_EMAIL_LIMIT: z.coerce.number().int().min(3).max(1_000).default(10),
+      // Phase 4: anonymous public-read pool (restricted `aura_public` login).
+      // Absent => the public storefront fails closed with 503; it never falls
+      // back to the authenticated app pool.
+      DATABASE_PUBLIC_URL: postgresUrl.optional(),
+      // HMAC key for signed discovery cursors. Required in production whenever
+      // the public surface is enabled; dev/test generate an ephemeral key.
+      PUBLIC_CURSOR_SECRET: z.string().min(32).max(512).optional(),
+      // Trusted-proxy setting for the public IP limiter. Default OFF: req.ip is
+      // the socket peer, so a spoofed X-Forwarded-For cannot evade the limiter.
+      TRUST_PROXY: z.string().max(128).optional(),
+      // Anonymous public read budget per IP per minute (plan §3.4 default 240).
+      PUBLIC_READ_IP_LIMIT: z.coerce.number().int().min(1).max(100_000).default(240),
     })
     .safeParse(env);
   if (!config.success) throw new Error("Invalid server configuration");
@@ -95,6 +107,10 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
     AUTH_REGISTER_HOURLY_LIMIT,
     AUTH_LOGIN_IP_LIMIT,
     AUTH_LOGIN_EMAIL_LIMIT,
+    DATABASE_PUBLIC_URL,
+    PUBLIC_CURSOR_SECRET,
+    TRUST_PROXY,
+    PUBLIC_READ_IP_LIMIT,
   } = config.data;
   if (Boolean(SUPABASE_URL) !== Boolean(SUPABASE_ANON_KEY))
     throw new Error("Database settings must be supplied together");
@@ -124,11 +140,30 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
     if (!EMAIL_FROM) throw new Error("Production requires a sender mailbox");
     if (/[?&]sslmode=disable(?:&|$)/.test(DATABASE_URL))
       throw new Error("Production requires TLS to the runtime database");
+    // The public surface is optional, but when enabled in production it must
+    // have a cursor secret and TLS, exactly like the runtime database.
+    if (DATABASE_PUBLIC_URL) {
+      if (!PUBLIC_CURSOR_SECRET)
+        throw new Error(
+          "Production requires PUBLIC_CURSOR_SECRET when the public storefront is enabled"
+        );
+      if (/[?&]sslmode=disable(?:&|$)/.test(DATABASE_PUBLIC_URL))
+        throw new Error("Production requires TLS to the public database");
+    }
   }
 
   const origin = APP_ORIGIN ? new URL(APP_ORIGIN).origin : undefined;
   if (origin && !/^https?:$/.test(new URL(origin).protocol))
     throw new Error("Invalid application origin");
+
+  // Trusted proxy is OFF by default. Accept "true"/"false", a hop count, or a
+  // subnet/IP list; anything else is rejected rather than silently trusted.
+  const trustProxy: boolean | number | string = (() => {
+    if (!TRUST_PROXY || TRUST_PROXY === "false") return false;
+    if (TRUST_PROXY === "true") return true;
+    if (/^\d+$/.test(TRUST_PROXY)) return Number(TRUST_PROXY);
+    return TRUST_PROXY;
+  })();
 
   return {
     port: apiPort(env.PORT),
@@ -140,6 +175,10 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
         : undefined,
     diagnosticToken: LOCAL_DIAGNOSTIC_TOKEN,
     postgres: DATABASE_URL ? { url: DATABASE_URL } : undefined,
+    publicPostgres: DATABASE_PUBLIC_URL ? { url: DATABASE_PUBLIC_URL } : undefined,
+    publicCursorSecret: PUBLIC_CURSOR_SECRET,
+    trustProxy,
+    publicReadIpLimit: PUBLIC_READ_IP_LIMIT,
     appOrigin: origin,
     email: SMTP_URL && EMAIL_FROM ? { smtpUrl: SMTP_URL, from: EMAIL_FROM } : undefined,
     sessionTtlSeconds: SESSION_TTL_HOURS * 3600,

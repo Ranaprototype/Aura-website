@@ -1,0 +1,12 @@
+PASS  A.1 /api/health/live carries Cache-Control: no-store
+PASS  A.2 anonymous GET /api/v1/auth/session succeeds without any cookie (CSRF-safe GET path)
+INFO  /api/v1/auth/session Cache-Control = null (expected defect: null)
+PASS  A.3 DEFECT CONFIRMED: v1 responses currently lack no-store (Phase 4 must fix mount order)
+PASS  A.4 anonymous public-style GET is not blocked by origin/CSRF guard (safe method)
+PASS  A.5 cross-site mutation still refused (origin_rejected)
+PASS  A.6 no public catalogue endpoint exists today; uniform JSON 404 not_found
+PASS  A.7 API 404 carries no-store (catch-all path)
+PASS  A.8 seller surface requires a session (401 authentication_required)
+PASS  A.9 csrfGuard issues the double-submit cookie on anonymous GET (public reads must tolerate it)
+
+9 passed, 0 failed

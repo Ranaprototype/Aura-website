@@ -1,0 +1,106 @@
+
+> holo-phase1@1.0.0 test /home/user/Aura-website
+> vitest run --config vitest.config.ts
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.12 [39m[90m/home/user/Aura-website[39m
+
+ [32m✓[39m tests/marketplace-rls.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 3243[2mms[22m[39m
+ [32m✓[39m tests/marketplace-api.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 5780[2mms[22m[39m
+     [33m[2m✓[22m[39m rejects a seller application with a note and allows rework [33m 390[2mms[22m[39m
+ [32m✓[39m tests/storefront-api.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 9987[2mms[22m[39m
+     [33m[2m✓[22m[39m fails closed with 503 when the public pool is unconfigured [33m 1821[2mms[22m[39m
+     [33m[2m✓[22m[39m fails closed with 503 when the public pool cannot be reached [33m 1750[2mms[22m[39m
+     [33m[2m✓[22m[39m throttles anonymous reads per IP with Retry-After, isolated from auth limits [33m 1677[2mms[22m[39m
+ [32m✓[39m tests/auth-api.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 13367[2mms[22m[39m
+     [33m[2m✓[22m[39m creates an account, an owner organization and a server-side session [33m 390[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses protected work until the address is confirmed [33m 344[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses a replayed verification token [33m 315[2mms[22m[39m
+     [33m[2m✓[22m[39m issues a fresh link on resend and invalidates the previous one [33m 433[2mms[22m[39m
+     [33m[2m✓[22m[39m requires an organization membership for organization-scoped routes [33m 335[2mms[22m[39m
+     [33m[2m✓[22m[39m authenticates with the stored credential and restores the session [33m 459[2mms[22m[39m
+     [33m[2m✓[22m[39m revokes the session on logout and refuses the old cookie [33m 337[2mms[22m[39m
+     [33m[2m✓[22m[39m enforces the registration ceiling as a real control [33m 2392[2mms[22m[39m
+     [33m[2m✓[22m[39m locks an account after repeated failures without disclosing the reason [33m 796[2mms[22m[39m
+     [33m[2m✓[22m[39m marks cookies Secure when the deployment is production [33m 1983[2mms[22m[39m
+     [33m[2m✓[22m[39m ignores principal, role and organization hints from headers, body and query [33m 633[2mms[22m[39m
+     [33m[2m✓[22m[39m resets the password, revokes every session and invalidates the link [33m 673[2mms[22m[39m
+     [33m[2m✓[22m[39m rate limits repeated recovery requests without changing the response [33m 674[2mms[22m[39m
+ [32m✓[39m tests/tenant-isolation.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 2529[2mms[22m[39m
+Error: Not implemented: navigation (except hash changes)
+    at module.exports (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at navigateFetch (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:77:3)
+    at exports.navigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:55:3)
+    at LocationImpl._locationObjectNavigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:30:5)
+    at LocationImpl.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:220:10)
+    at Location.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/Location.js:94:36)
+    at /home/user/Aura-website/client/src/hooks/useMarketplaceSession.ts:26:60
+    at Object.react_stack_bottom_frame (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29) undefined
+Error: Not implemented: navigation (except hash changes)
+    at module.exports (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at navigateFetch (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:77:3)
+    at exports.navigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:55:3)
+    at LocationImpl._locationObjectNavigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:30:5)
+    at LocationImpl.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:220:10)
+    at Location.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/Location.js:94:36)
+    at /home/user/Aura-website/client/src/hooks/useMarketplaceSession.ts:26:60
+    at Object.react_stack_bottom_frame (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29) undefined
+Error: Not implemented: navigation (except hash changes)
+    at module.exports (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at navigateFetch (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:77:3)
+    at exports.navigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:55:3)
+    at LocationImpl._locationObjectNavigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:30:5)
+    at LocationImpl.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:220:10)
+    at Location.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/Location.js:94:36)
+    at /home/user/Aura-website/client/src/hooks/useMarketplaceSession.ts:26:60
+    at Object.react_stack_bottom_frame (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29) undefined
+Error: Not implemented: navigation (except hash changes)
+    at module.exports (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/browser/not-implemented.js:9:17)
+    at navigateFetch (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:77:3)
+    at exports.navigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/navigation.js:55:3)
+    at LocationImpl._locationObjectNavigate (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:30:5)
+    at LocationImpl.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/window/Location-impl.js:220:10)
+    at Location.replace (/home/user/Aura-website/node_modules/.pnpm/jsdom@26.1.0/node_modules/jsdom/lib/jsdom/living/generated/Location.js:94:36)
+    at /home/user/Aura-website/client/src/hooks/useMarketplaceSession.ts:26:60
+    at Object.react_stack_bottom_frame (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:25989:20)
+    at runWithFiberInDEV (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:874:13)
+    at commitHookEffectListMount (/home/user/Aura-website/node_modules/.pnpm/react-dom@19.2.1_react@19.2.1/node_modules/react-dom/cjs/react-dom-client.development.js:13249:29) undefined
+ [32m✓[39m tests/marketplace-ui.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[32m 288[2mms[22m[39m
+ [32m✓[39m tests/migrations.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 2464[2mms[22m[39m
+ [32m✓[39m tests/email.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 4269[2mms[22m[39m
+ [32m✓[39m tests/marketplace-audit.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 4845[2mms[22m[39m
+     [33m[2m✓[22m[39m Q5 · the admin review surface refuses anonymous and ordinary sellers [33m 2100[2mms[22m[39m
+ [32m✓[39m tests/workspace.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 8162[2mms[22m[39m
+     [33m[2m✓[22m[39m lets an owner invite, an invitee accept and a viewer read only [33m 915[2mms[22m[39m
+     [33m[2m✓[22m[39m binds an invitation to the invited address [33m 817[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses a duplicate pending invitation and a revoked one [33m 459[2mms[22m[39m
+     [33m[2m✓[22m[39m promotes a member and notifies them, and blocks an admin from inviting an admin [33m 1133[2mms[22m[39m
+     [33m[2m✓[22m[39m revokes access immediately and notifies the removed member [33m 881[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps the last owner in place [33m 306[2mms[22m[39m
+     [33m[2m✓[22m[39m enforces a viewer read-only project list and owner-only deletion [33m 310[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses cross-organization identifiers even for an owner of another tenant [33m 588[2mms[22m[39m
+ [32m✓[39m tests/storefront-cursor.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 2738[2mms[22m[39m
+ [32m✓[39m tests/supabase-identity.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 4405[2mms[22m[39m
+ [32m✓[39m tests/api.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 136[2mms[22m[39m
+ [32m✓[39m tests/config.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m tests/adapter.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 2652[2mms[22m[39m
+   [33m[2m✓[22m[39m aborts a stalled read and reports generic unavailable readiness [33m 2504[2mms[22m[39m
+ [32m✓[39m tests/storefront-limits.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2435[2mms[22m[39m
+ [32m✓[39m tests/routing.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 146[2mms[22m[39m
+ [32m✓[39m tests/containment.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m tests/migration.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 2124[2mms[22m[39m
+   [33m[2m✓[22m[39m replays the historical migration and distinguishes grants from permissive RLS [33m 2123[2mms[22m[39m
+ [32m✓[39m tests/wishlist.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/cart.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m21 passed[39m[22m[90m (21)[39m
+[2m      Tests [22m [1m[32m338 passed[39m[22m[90m (338)[39m
+[2m   Start at [22m 04:41:03
+[2m   Duration [22m 78.26s[2m (transform 1.14s, setup 0ms, import 4.84s, tests 69.70s, environment 1.08s)[22m
+

@@ -166,6 +166,7 @@ export function mapDatabaseError(error: unknown): never {
   if (code === "22023") {
     const known = [
       "review_note_required",
+      "suspension_note_required",
       "invalid_organization_name",
       "invalid_organization_slug",
     ];
@@ -182,6 +183,8 @@ export function mapDatabaseError(error: unknown): never {
       ["invalid_attribute_value", 400],
       ["product_locked", 409],
       ["seller_locked", 409],
+      ["seller_suspended", 409],
+      ["suspension_must_be_atomic", 409],
       ["seller_not_approved", 409],
       ["invalid_status_transition", 409],
       ["revision_not_approved", 409],

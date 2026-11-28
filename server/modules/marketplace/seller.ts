@@ -1,5 +1,6 @@
 import express from "express";
 import { requireOrganization, requireRole } from "../authorized";
+import { AccessError } from "../../db/database";
 import { RequestError } from "../../http/errors";
 import type { AppServices } from "../../services";
 import { CATALOG_MANAGE_ROLES } from "../../../shared/marketplace";
@@ -7,6 +8,7 @@ import {
   countStatuses,
   loadAudit,
   loadSeller,
+  loadSuspensionNote,
   requireSeller,
   serializeSeller,
   SELLER_COLUMNS,
@@ -27,6 +29,12 @@ export function sellerRoutes(services: AppServices) {
     "/seller/dashboard",
     requireOrganization(services, async ({ tx, orgId, role }) => {
       const seller = await loadSeller(tx, orgId!);
+      // D-03: confidential suspension note is restricted to owner/admin here;
+      // the accessor re-checks in the database.
+      const suspensionNote =
+        seller && (role === "owner" || role === "admin")
+          ? await loadSuspensionNote(tx, orgId!)
+          : undefined;
       const counts = await countStatuses(tx, orgId!);
       const recent = seller
         ? await loadAudit(tx, "seller_profile", seller.id)
@@ -39,7 +47,7 @@ export function sellerRoutes(services: AppServices) {
         body: {
           organization: { id: orgId, name: organization?.name ?? "" },
           role,
-          seller: seller ? serializeSeller(seller) : null,
+          seller: seller ? serializeSeller(seller, suspensionNote) : null,
           productCounts: counts,
           recentSellerActivity: recent.slice(-10).reverse(),
           permissions: {
@@ -53,12 +61,46 @@ export function sellerRoutes(services: AppServices) {
 
   router.get(
     "/seller/profile",
-    requireOrganization(services, async ({ tx, orgId }) => {
+    requireOrganization(services, async ({ tx, orgId, role }) => {
       const seller = await loadSeller(tx, orgId!);
+      const suspensionNote =
+        seller && (role === "owner" || role === "admin")
+          ? await loadSuspensionNote(tx, orgId!)
+          : undefined;
       return {
         body: {
-          seller: seller ? serializeSeller(seller) : null,
+          seller: seller ? serializeSeller(seller, suspensionNote) : null,
           audit: seller ? await loadAudit(tx, "seller_profile", seller.id) : [],
+        },
+      };
+    })
+  );
+
+  // Phase 4 (D-03): the confidential suspension note. Owner/admin of the org
+  // or a platform administrator only; ordinary members get 403 role_forbidden.
+  // The database accessor re-checks the same rule, so this guard is defence in
+  // depth, not the sole gate.
+  router.get(
+    "/seller/suspension",
+    requireOrganization(services, async ({ tx, orgId, role, auth }) => {
+      const seller = await loadSeller(tx, orgId!);
+      if (!seller) throw new RequestError(404, "seller_not_found");
+      let allowed = role === "owner" || role === "admin";
+      if (!allowed) {
+        const admin = await tx.query(
+          `select 1 from aura.platform_admins where principal_id = $1`,
+          [auth.principalId]
+        );
+        allowed = admin.length > 0;
+      }
+      if (!allowed) throw new AccessError("role_forbidden");
+      const note = await loadSuspensionNote(tx, orgId!);
+      return {
+        body: {
+          suspendedAt: seller.suspended_at
+            ? new Date(seller.suspended_at).toISOString()
+            : null,
+          note,
         },
       };
     })

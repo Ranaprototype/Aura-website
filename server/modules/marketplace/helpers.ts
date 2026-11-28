@@ -26,6 +26,7 @@ export interface SellerRow {
   submitted_at: Date | null;
   reviewed_at: Date | null;
   review_note: string | null;
+  suspended_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -33,7 +34,10 @@ export interface SellerRow {
 const iso = (value: Date | null | undefined) =>
   value ? new Date(value).toISOString() : null;
 
-export const serializeSeller = (row: SellerRow): SellerProfileView => ({
+export const serializeSeller = (
+  row: SellerRow,
+  suspensionNote?: string | null
+): SellerProfileView => ({
   id: row.id,
   orgId: row.org_id,
   displayName: row.display_name,
@@ -48,12 +52,33 @@ export const serializeSeller = (row: SellerRow): SellerProfileView => ({
   reviewNote: row.review_note,
   createdAt: iso(row.created_at)!,
   updatedAt: iso(row.updated_at)!,
+  suspendedAt: iso(row.suspended_at),
+  // D-03: the confidential note is included ONLY when the caller has already
+  // proven the reader is an owner/admin or platform admin and fetched it via
+  // the restricted accessor. Never select suspension_note directly.
+  ...(suspensionNote !== undefined ? { suspensionNote } : {}),
 });
+
+/**
+ * Read the confidential suspension note through the SECURITY DEFINER accessor
+ * (aura_app has no column grant on suspension_note). The database re-checks
+ * owner/admin/platform-admin; callers must only invoke this for those readers.
+ */
+export const loadSuspensionNote = async (
+  tx: Transaction,
+  orgId: string
+): Promise<string | null> => {
+  const rows = await tx.query<{ note: string | null }>(
+    `select aura.seller_suspension_note($1) as note`,
+    [orgId]
+  );
+  return rows[0]?.note ?? null;
+};
 
 export const loadSeller = async (tx: Transaction, orgId: string) => {
   const rows = await tx.query<SellerRow>(
     `select id, org_id, display_name, legal_name, business_email, country, website,
-            description, status, submitted_at, reviewed_at, review_note,
+            description, status, submitted_at, reviewed_at, review_note, suspended_at,
             created_at, updated_at
        from aura.seller_profiles
       where org_id = $1`,
@@ -69,7 +94,8 @@ export const requireSeller = async (tx: Transaction, orgId: string) => {
 };
 
 export const SELLER_COLUMNS = `id, org_id, display_name, legal_name, business_email, country,
-  website, description, status, submitted_at, reviewed_at, review_note, created_at, updated_at`;
+  website, description, status, submitted_at, reviewed_at, review_note, suspended_at,
+  created_at, updated_at`;
 
 export interface CategoryAttributeRow {
   id: string;

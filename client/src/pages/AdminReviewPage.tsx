@@ -9,7 +9,7 @@ import {
   type AdminSeller,
 } from "../lib/marketplace";
 
-type Tab = "sellers" | "products";
+type Tab = "sellers" | "products" | "suspension";
 
 /**
  * Platform product-review interface.
@@ -23,17 +23,20 @@ export default function AdminReviewPage() {
   const { session, orgId, setOrgId } = useMarketplaceSession();
   const [tab, setTab] = useState<Tab>("sellers");
   const [sellers, setSellers] = useState<AdminSeller[]>([]);
+  const [managed, setManaged] = useState<AdminSeller[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [detail, setDetail] = useState<AdminProduct>();
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [suspensionNotes, setSuspensionNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [sellerQueue, productQueue] = await Promise.all([
+    const [sellerQueue, productQueue, managedQueue] = await Promise.all([
       marketplace.adminSellers("submitted"),
       marketplace.adminProducts("submitted"),
+      marketplace.adminSellers("approved"),
     ]);
     if (!sellerQueue.ok) {
       setError(
@@ -43,6 +46,7 @@ export default function AdminReviewPage() {
     }
     setSellers(sellerQueue.data.sellers);
     if (productQueue.ok) setProducts(productQueue.data.products);
+    if (managedQueue.ok) setManaged(managedQueue.data.sellers);
   }, []);
 
   useEffect(() => {
@@ -141,6 +145,16 @@ export default function AdminReviewPage() {
           Products{" "}
           <span data-testid="product-queue-count">{products.length}</span>
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "suspension"}
+          className={tab === "suspension" ? "is-active" : undefined}
+          onClick={() => setTab("suspension")}
+        >
+          Suspension{" "}
+          <span data-testid="suspension-queue-count">{managed.length}</span>
+        </button>
       </div>
 
       {tab === "sellers" ? (
@@ -229,6 +243,94 @@ export default function AdminReviewPage() {
                   >
                     Reject
                   </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : tab === "suspension" ? (
+        managed.length === 0 ? (
+          <p className="market-muted" data-testid="suspension-queue-empty">
+            No approved sellers are available to manage.
+          </p>
+        ) : (
+          <ul className="market-review-list" data-testid="suspension-queue">
+            {managed.map(seller => (
+              <li key={seller.id} className="market-panel">
+                <div className="market-panel__head">
+                  <h2>{seller.displayName}</h2>
+                  <MarketStatusBadge status={seller.status} />
+                </div>
+                <dl className="market-definitions">
+                  <div>
+                    <dt>Organization</dt>
+                    <dd>{seller.orgName}</dd>
+                  </div>
+                  <div>
+                    <dt>Suspension</dt>
+                    <dd data-testid={`suspension-state-${seller.orgId}`}>
+                      {seller.suspendedAt
+                        ? `Suspended ${new Date(seller.suspendedAt).toLocaleString()}`
+                        : "Active"}
+                    </dd>
+                  </div>
+                </dl>
+                {seller.suspendedAt && seller.suspensionNote ? (
+                  <p className="market-muted" data-testid={`suspension-note-${seller.orgId}`}>
+                    Confidential note: {seller.suspensionNote}
+                  </p>
+                ) : null}
+                <div className="market-actions">
+                  {seller.suspendedAt ? (
+                    <button
+                      className="market-button"
+                      type="button"
+                      disabled={busy}
+                      data-testid={`restore-${seller.orgId}`}
+                      onClick={() =>
+                        act(
+                          () => marketplace.restoreSeller(seller.orgId),
+                          `${seller.displayName} was restored.`
+                        )
+                      }
+                    >
+                      Restore seller
+                    </button>
+                  ) : (
+                    <>
+                      <input
+                        className="market-input market-input--note"
+                        aria-label={`Suspension note for ${seller.displayName}`}
+                        placeholder="Confidential suspension note (required)"
+                        value={suspensionNotes[seller.orgId] ?? ""}
+                        data-testid={`suspension-input-${seller.orgId}`}
+                        onChange={event =>
+                          setSuspensionNotes(current => ({
+                            ...current,
+                            [seller.orgId]: event.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        className="market-button market-button--quiet"
+                        type="button"
+                        disabled={busy || !(suspensionNotes[seller.orgId] ?? "").trim()}
+                        data-testid={`suspend-${seller.orgId}`}
+                        onClick={() =>
+                          act(
+                            () =>
+                              marketplace.suspendSeller(
+                                seller.orgId,
+                                suspensionNotes[seller.orgId]!.trim()
+                              ),
+                            `${seller.displayName} was suspended.`
+                          )
+                        }
+                      >
+                        Suspend seller
+                      </button>
+                    </>
+                  )}
                 </div>
               </li>
             ))}

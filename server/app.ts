@@ -6,6 +6,7 @@ import { authRoutes } from "./modules/auth";
 import { attachSession, csrfGuard } from "./modules/authorized";
 import { workspaceRoutes } from "./modules/workspace";
 import { marketplaceRoutes } from "./modules/marketplace";
+import { publicStorefrontRoutes } from "./modules/storefront";
 import type { DiagnosticsStore } from "./lib/supabase";
 import type { AppServices } from "./services";
 import { errors, fail } from "./http/errors";
@@ -31,7 +32,17 @@ export function createApp({
       .set("X-Frame-Options", "DENY");
     next();
   });
+  // Phase 4 (§4.15): no-store applies to EVERY API response, including the
+  // versioned routers below. Mounted before them so handled v1 responses carry
+  // it too (the previous mount-after ordering left v1 responses cacheable).
+  app.use("/api", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
   if (services) {
+    // Public limiter keys on req.ip; honour the configured proxy trust so a
+    // spoofed X-Forwarded-For cannot evade the budget when trust is off.
+    app.set("trust proxy", services.trustProxy);
     const origin = services.appOrigin;
     app.use("/api/v1", attachSession(services));
     // Origin allowlisting and the double-submit cookie apply to the whole
@@ -55,13 +66,13 @@ export function createApp({
       express.json({ limit: "32kb" }),
       marketplaceRoutes(services)
     );
+    // Phase 4: anonymous public discovery. GET-only, so csrfGuard passes safe
+    // methods and attachSession does no DB work without a cookie; reads run on
+    // the separate restricted public pool and fail closed when unconfigured.
+    app.use("/api/v1", publicStorefrontRoutes(services));
   }
   app.use(
     "/api",
-    (_req, res, next) => {
-      res.set("Cache-Control", "no-store");
-      next();
-    },
     diagnostics(store, diagnosticToken),
     (_req, res) => fail(res, 404, "not_found")
   );

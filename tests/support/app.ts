@@ -199,6 +199,9 @@ export async function startTestApp({
   });
   const services = createServices(config, {
     db: db.db,
+    // Phase 4: the anonymous public pool is available by default so storefront
+    // routes work; a test can pass services:{publicDb:undefined} to assert 503.
+    publicDb: db.publicDb,
     transport:
       transport ??
       createSmtpTransport({ url: sink.url, from: "AURA <no-reply@aura.test>" }),
